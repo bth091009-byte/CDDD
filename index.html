@@ -1,0 +1,3028 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Đo Điện ESP32-S3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --cyan:   #00e5ff;
+            --green:  #00ff9d;
+            --pink:   #ff2d78;
+            --yellow: #ffe600;
+            --orange: #ff8c00;
+            --purple: #bf5fff;
+            --teal:   #00ffc8;
+            --red:    #ff4f4f;
+            --bg-dark:  #030a1a;
+            --bg-panel: rgba(5,15,40,0.92);
+            --sidebar-w: 220px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0,60,120,0.4) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(0,80,60,0.25) 0%, transparent 50%),
+                radial-gradient(ellipse at 60% 80%, rgba(80,0,80,0.2) 0%, transparent 50%);
+            color: #c8e6ff;
+            font-family: 'Rajdhani', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: var(--sidebar-w); min-height: 100vh;
+            background: linear-gradient(180deg,rgba(0,10,30,.98),rgba(0,20,50,.95));
+            border-right: 1px solid rgba(0,229,255,.2);
+            display: flex; flex-direction: column;
+            position: fixed; top:0; left:0; z-index:100;
+            box-shadow: 4px 0 30px rgba(0,229,255,.1);
+        }
+        .sidebar-logo { padding:28px 20px 24px; border-bottom:1px solid rgba(0,229,255,.15); text-align:center; }
+        .sidebar-logo .logo-icon { font-size:2.5rem; display:block; margin-bottom:8px; filter:drop-shadow(0 0 12px var(--yellow)); animation:pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{transform:scale(1);filter:drop-shadow(0 0 12px var(--yellow))} 50%{transform:scale(1.1);filter:drop-shadow(0 0 20px var(--yellow))} }
+        .sidebar-logo h2 { font-family:'Orbitron',monospace; font-size:.72rem; font-weight:700; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; line-height:1.5; }
+        .sidebar-logo p { font-size:.68rem; color:rgba(200,230,255,.45); margin-top:4px; letter-spacing:1px; }
+        .sidebar-nav { flex:1; padding:20px 0; overflow-y:auto; }
+        .nav-label { font-size:.6rem; letter-spacing:3px; text-transform:uppercase; color:rgba(200,230,255,.3); padding:0 20px 10px; margin-top:10px; }
+        .nav-item { display:flex; align-items:center; gap:12px; padding:14px 20px; cursor:pointer; transition:all .25s; border-left:3px solid transparent; color:rgba(200,230,255,.6); font-size:.95rem; font-weight:500; letter-spacing:.5px; text-decoration:none; }
+        .nav-item:hover { background:rgba(0,229,255,.06); color:var(--cyan); border-left-color:rgba(0,229,255,.4); }
+        .nav-item.active { background:rgba(0,229,255,.1); color:var(--cyan); border-left-color:var(--cyan); }
+        .nav-item .nav-icon { font-size:1.1rem; width:22px; text-align:center; }
+        .nav-exp-sub { padding:8px 20px 8px 52px; font-size:.8rem; color:rgba(200,230,255,.5); cursor:pointer; transition:all .2s; border-left:3px solid transparent; }
+        .nav-exp-sub:hover { color:var(--teal); background:rgba(0,255,200,.05); border-left-color:rgba(0,255,200,.3); }
+        .nav-exp-sub.active { color:var(--teal); border-left-color:var(--teal); }
+        .sidebar-footer { padding:16px 20px; border-top:1px solid rgba(0,229,255,.1); font-size:.65rem; color:rgba(200,230,255,.3); text-align:center; letter-spacing:1px; }
+
+        /* MAIN */
+        #main { margin-left:var(--sidebar-w); flex:1; padding:30px; min-height:100vh; }
+        .page { display:none; }
+        .page.active { display:block; }
+        .page-header { margin-bottom:28px; padding-bottom:18px; border-bottom:1px solid rgba(0,229,255,.15); }
+        .page-header h1 { font-family:'Orbitron',monospace; font-size:1.3rem; font-weight:700; color:var(--cyan); letter-spacing:3px; text-transform:uppercase; margin-bottom:4px; text-shadow:0 0 20px rgba(0,229,255,.5); }
+        .page-header p { font-size:.85rem; color:rgba(200,230,255,.45); letter-spacing:1px; }
+
+        /* PANEL */
+        .panel { background:var(--bg-panel); border:1px solid rgba(0,229,255,.15); border-radius:16px; padding:24px; backdrop-filter:blur(12px); box-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05); margin-bottom:22px; }
+
+        /* STATUS */
+        .status-bar { display:flex; align-items:center; gap:16px; padding:14px 20px; background:rgba(0,229,255,.04); border:1px solid rgba(0,229,255,.12); border-radius:12px; margin-bottom:22px; }
+        .status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 1.5s ease-in-out infinite; }
+        .status-dot.offline { background:#ff4444; box-shadow:0 0 8px #ff4444; animation:none; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .status-text { font-size:.82rem; color:rgba(200,230,255,.6); letter-spacing:1px; }
+        .status-time { font-family:'Orbitron',monospace; font-size:.72rem; color:rgba(200,230,255,.35); margin-left:auto; }
+
+        /* METRIC CARDS */
+        .metric-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:22px; }
+        .metric-card { background:var(--bg-panel); border-radius:18px; padding:22px 18px; border:1px solid rgba(0,229,255,.15); position:relative; overflow:hidden; backdrop-filter:blur(10px); transition:transform .2s,box-shadow .2s; }
+        .metric-card:hover { transform:translateY(-4px); box-shadow:0 16px 40px rgba(0,0,0,.5); }
+        .metric-card::before { content:''; position:absolute; top:0;left:0;right:0; height:3px; }
+        .card-I::before   { background:linear-gradient(90deg,var(--cyan),transparent); }
+        .card-U1::before  { background:linear-gradient(90deg,var(--yellow),transparent); }
+        .card-U2::before  { background:linear-gradient(90deg,var(--purple),transparent); }
+        .metric-card .glow-bg { position:absolute; width:110px;height:110px; border-radius:50%; opacity:.08; top:-20px;right:-20px; }
+        .card-I  .glow-bg  { background:var(--cyan); }
+        .card-U1 .glow-bg  { background:var(--yellow); }
+        .card-U2 .glow-bg  { background:var(--purple); }
+        .metric-label { font-size:.7rem; letter-spacing:3px; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
+        .card-I  .metric-label { color:var(--cyan); }
+        .card-U1 .metric-label { color:var(--yellow); }
+        .card-U2 .metric-label { color:var(--purple); }
+        .metric-name { font-size:.72rem; color:rgba(200,230,255,.45); margin-bottom:12px; letter-spacing:1px; }
+        .metric-value { font-family:'Orbitron',monospace; font-size:2rem; font-weight:700; line-height:1; margin-bottom:6px; }
+        .card-I  .metric-value { color:var(--cyan);   text-shadow:0 0 20px rgba(0,229,255,.6); }
+        .card-U1 .metric-value { color:var(--yellow); text-shadow:0 0 20px rgba(255,230,0,.6); }
+        .card-U2 .metric-value { color:var(--purple); text-shadow:0 0 20px rgba(191,95,255,.6); }
+        .metric-unit { font-size:.72rem; color:rgba(200,230,255,.4); letter-spacing:2px; }
+
+        /* CALC GRID 3x2 */
+        .calc-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+        .calc-box { background:rgba(0,229,255,.04); border:1px solid rgba(0,229,255,.1); border-radius:10px; padding:14px; text-align:center; }
+        .calc-label { font-size:.68rem; color:rgba(200,230,255,.4); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+        .calc-val { font-family:'Orbitron',monospace; font-size:1.15rem; }
+        .calc-unit { font-size:.68rem; color:rgba(200,230,255,.35); margin-top:4px; }
+
+        /* CHARTS */
+        .chart-wrap { background:var(--bg-panel); border:1px solid rgba(0,229,255,.12); border-radius:16px; padding:20px 22px; margin-bottom:16px; backdrop-filter:blur(10px); }
+        .chart-title { font-family:'Orbitron',monospace; font-size:.75rem; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px; font-weight:600; }
+        .cI   .chart-title { color:var(--cyan); }
+        .cU1  .chart-title { color:var(--yellow); }
+        .cU2  .chart-title { color:var(--purple); }
+        .cR1  .chart-title { color:var(--orange); }
+        .cR2  .chart-title { color:var(--red); }
+        .cQ1  .chart-title { color:var(--green); }
+        .cQ2  .chart-title { color:var(--teal); }
+        canvas { max-height:150px !important; }
+
+        /* CHATBOT */
+        .chat-layout { display:grid; grid-template-columns:1fr 260px; gap:20px; height:calc(100vh - 160px); }
+        .chat-main { display:flex; flex-direction:column; background:var(--bg-panel); border:1px solid rgba(0,229,255,.15); border-radius:16px; overflow:hidden; backdrop-filter:blur(12px); }
+        .chat-header { padding:16px 22px; border-bottom:1px solid rgba(0,229,255,.12); background:rgba(0,10,30,.6); display:flex; align-items:center; gap:12px; }
+        .chat-header .bot-avatar { width:36px;height:36px; border-radius:50%; background:linear-gradient(135deg,rgba(0,229,255,.2),rgba(0,255,157,.1)); border:1px solid rgba(0,229,255,.3); display:flex;align-items:center;justify-content:center; font-size:1.1rem; }
+        .chat-header .bot-name { font-family:'Orbitron',monospace; font-size:.8rem; color:var(--cyan); font-weight:700; letter-spacing:1px; }
+        .chat-header .bot-status { font-size:.68rem; color:var(--green); letter-spacing:1px; }
+        #chatBox { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+        #chatBox::-webkit-scrollbar{width:4px} #chatBox::-webkit-scrollbar-track{background:transparent} #chatBox::-webkit-scrollbar-thumb{background:rgba(0,229,255,.2);border-radius:2px}
+        .msg-row { display:flex; align-items:flex-end; gap:10px; }
+        .msg-row.user { flex-direction:row-reverse; }
+        .msg-avatar { width:30px;height:30px; border-radius:50%; display:flex;align-items:center;justify-content:center; font-size:.85rem; flex-shrink:0; }
+        .msg-avatar.bot { background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.2); }
+        .msg-avatar.user-av { background:rgba(255,230,0,.1); border:1px solid rgba(255,230,0,.2); }
+        .bubble { max-width:72%; padding:12px 16px; border-radius:14px; font-size:.88rem; line-height:1.6; }
+        .bubble.bot-b { background:rgba(0,229,255,.07); border:1px solid rgba(0,229,255,.15); color:rgba(200,230,255,.9); border-bottom-left-radius:4px; }
+        .bubble.user-b { background:rgba(255,230,0,.08); border:1px solid rgba(255,230,0,.15); color:rgba(255,240,150,.9); border-bottom-right-radius:4px; }
+        .typing-b { background:rgba(0,229,255,.06); border:1px solid rgba(0,229,255,.12); }
+        .typing-dots { display:flex; gap:4px; align-items:center; height:20px; }
+        .typing-dots span { width:6px;height:6px; border-radius:50%; background:var(--cyan); animation:typing 1.4s infinite; }
+        .typing-dots span:nth-child(2){animation-delay:.2s} .typing-dots span:nth-child(3){animation-delay:.4s}
+        @keyframes typing { 0%,60%,100%{opacity:.2;transform:scale(.8)} 30%{opacity:1;transform:scale(1.1)} }
+        .chat-input-area { padding:16px 20px; border-top:1px solid rgba(0,229,255,.1); display:flex; gap:10px; background:rgba(0,10,30,.5); }
+        #userInput { flex:1; background:rgba(0,10,30,.8); border:1px solid rgba(0,229,255,.2); border-radius:10px; padding:11px 16px; color:#c8e6ff; font-family:'Rajdhani',sans-serif; font-size:.92rem; outline:none; transition:border-color .2s; }
+        #userInput:focus{border-color:rgba(0,229,255,.5)} #userInput::placeholder{color:rgba(200,230,255,.3)}
+        .send-btn { background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(0,229,255,.05)); border:1px solid rgba(0,229,255,.3); border-radius:10px; padding:11px 18px; color:var(--cyan); cursor:pointer; font-size:1rem; transition:all .2s; }
+        .send-btn:hover{background:rgba(0,229,255,.2);border-color:var(--cyan)}
+        .chat-sidebar { display:flex; flex-direction:column; gap:14px; }
+        .quick-panel { background:var(--bg-panel); border:1px solid rgba(0,229,255,.12); border-radius:14px; padding:18px; backdrop-filter:blur(10px); }
+        .quick-panel h4 { font-family:'Orbitron',monospace; font-size:.7rem; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
+        .quick-btn { width:100%; text-align:left; background:rgba(0,229,255,.04); border:1px solid rgba(0,229,255,.12); border-radius:8px; padding:10px 12px; color:rgba(200,230,255,.7); font-size:.8rem; cursor:pointer; margin-bottom:7px; transition:all .2s; font-family:'Rajdhani',sans-serif; letter-spacing:.5px; }
+        .quick-btn:hover{background:rgba(0,229,255,.1);color:var(--cyan);border-color:rgba(0,229,255,.3)}
+        .context-panel { background:var(--bg-panel); border:1px solid rgba(0,255,157,.15); border-radius:14px; padding:18px; }
+        .context-panel h4 { font-family:'Orbitron',monospace; font-size:.7rem; color:var(--green); letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
+        .ctx-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(0,229,255,.07); font-size:.78rem; }
+        .ctx-row:last-child{border-bottom:none}
+        .ctx-label{color:rgba(200,230,255,.45)}
+        .ctx-val{font-family:'Orbitron',monospace;font-size:.72rem;color:var(--cyan)}
+
+        /* ===== THÍ NGHIỆM ===== */
+        /* CTA Banner */
+        .exp-cta-banner {
+            background: linear-gradient(135deg, rgba(0,229,255,.08), rgba(0,255,200,.06));
+            border: 1px solid rgba(0,229,255,.3);
+            border-radius: 20px;
+            padding: 28px 32px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .exp-cta-banner::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(0,229,255,.03), transparent);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+        @keyframes shimmer { 0%,100%{opacity:0} 50%{opacity:1} }
+        .exp-cta-banner .cta-icon { font-size:3.5rem; filter:drop-shadow(0 0 16px rgba(0,229,255,.8)); animation:pulse 2s ease-in-out infinite; flex-shrink:0; }
+        .exp-cta-banner .cta-text h2 { font-family:'Orbitron',monospace; font-size:1.1rem; color:var(--cyan); font-weight:700; letter-spacing:2px; margin-bottom:6px; }
+        .exp-cta-banner .cta-text p { font-size:.85rem; color:rgba(200,230,255,.6); line-height:1.6; }
+        .exp-cta-btn {
+            margin-left:auto; flex-shrink:0;
+            background: linear-gradient(135deg, rgba(0,229,255,.2), rgba(0,200,255,.1));
+            border: 2px solid var(--cyan);
+            border-radius: 14px;
+            padding: 16px 28px;
+            color: var(--cyan);
+            font-family: 'Orbitron', monospace;
+            font-size: .82rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all .3s;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0,229,255,.2);
+            white-space: nowrap;
+        }
+        .exp-cta-btn:hover { background:linear-gradient(135deg,rgba(0,229,255,.35),rgba(0,200,255,.2)); box-shadow:0 0 30px rgba(0,229,255,.5); transform:translateY(-2px); }
+
+        /* EXP LIST */
+        .exp-list-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+        .exp-card {
+            background: var(--bg-panel);
+            border: 1px solid rgba(0,229,255,.12);
+            border-radius: 16px;
+            padding: 22px;
+            cursor: pointer;
+            transition: all .25s;
+            position: relative;
+            overflow: hidden;
+        }
+        .exp-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+        .exp-card:nth-child(1)::before { background:linear-gradient(90deg,var(--cyan),transparent); }
+        .exp-card:nth-child(2)::before { background:linear-gradient(90deg,var(--yellow),transparent); }
+        .exp-card:nth-child(3)::before { background:linear-gradient(90deg,var(--orange),transparent); }
+        .exp-card:nth-child(4)::before { background:linear-gradient(90deg,var(--green),transparent); }
+        .exp-card:nth-child(5)::before { background:linear-gradient(90deg,var(--purple),transparent); }
+        .exp-card:hover { transform:translateY(-4px); border-color:rgba(0,229,255,.3); box-shadow:0 12px 40px rgba(0,0,0,.5); }
+        .exp-card .exp-num { font-family:'Orbitron',monospace; font-size:2.2rem; font-weight:900; opacity:.15; position:absolute; top:10px; right:16px; }
+        .exp-card .exp-icon { font-size:2rem; margin-bottom:12px; }
+        .exp-card h3 { font-size:1rem; font-weight:600; color:rgba(200,230,255,.9); margin-bottom:8px; line-height:1.4; }
+        .exp-card p { font-size:.78rem; color:rgba(200,230,255,.45); line-height:1.6; }
+        .exp-card .exp-badge { display:inline-block; margin-top:12px; padding:4px 10px; border-radius:6px; font-size:.68rem; letter-spacing:1px; font-weight:600; }
+
+        /* EXP PAGE */
+        .exp-page { display:none; }
+        .exp-page.active { display:block; }
+
+        /* STEP WIZARD */
+        .step-wizard { display:flex; gap:8px; margin-bottom:28px; flex-wrap:wrap; }
+        .step-btn {
+            display:flex; align-items:center; gap:8px;
+            padding:10px 16px; border-radius:10px;
+            border: 1px solid rgba(0,229,255,.15);
+            background: rgba(0,10,30,.6);
+            color: rgba(200,230,255,.45);
+            font-size:.78rem; font-family:'Orbitron',monospace; letter-spacing:1px;
+            cursor:pointer; transition:all .25s; position:relative;
+        }
+        .step-btn.completed { border-color:rgba(0,255,157,.3); background:rgba(0,255,157,.05); color:rgba(0,255,157,.7); }
+        .step-btn.active { border-color:var(--cyan); background:rgba(0,229,255,.1); color:var(--cyan); box-shadow:0 0 12px rgba(0,229,255,.2); }
+        .step-btn .step-circle { width:22px;height:22px; border-radius:50%; display:flex;align-items:center;justify-content:center; font-size:.72rem; font-weight:700; background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.3); }
+        .step-btn.active .step-circle { background:var(--cyan); color:#000; border-color:var(--cyan); }
+        .step-btn.completed .step-circle { background:var(--green); color:#000; border-color:var(--green); }
+        .step-connector { width:20px; height:1px; background:rgba(0,229,255,.15); align-self:center; flex-shrink:0; }
+
+        /* STAGE CONTENT */
+        .stage-content { display:none; }
+        .stage-content.active { display:block; animation: fadeIn .35s ease; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+        .stage-box {
+            background: var(--bg-panel);
+            border: 1px solid rgba(0,229,255,.15);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 20px;
+        }
+        .stage-title { font-family:'Orbitron',monospace; font-size:.9rem; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; margin-bottom:20px; display:flex; align-items:center; gap:12px; }
+        .stage-title .stage-icon { font-size:1.4rem; }
+
+        /* AI GUIDE BOX */
+        .ai-guide {
+            background: linear-gradient(135deg, rgba(0,229,255,.06), rgba(0,255,157,.04));
+            border: 1px solid rgba(0,229,255,.2);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom:20px;
+        }
+        .ai-guide-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+        .ai-guide-header .ai-icon { font-size:1.4rem; }
+        .ai-guide-header span { font-family:'Orbitron',monospace; font-size:.72rem; color:var(--cyan); letter-spacing:2px; }
+        .ai-guide-text { font-size:.9rem; color:rgba(200,230,255,.85); line-height:1.8; }
+
+        /* REALTIME DISPLAY */
+        .rt-display { display:grid; gap:12px; margin-bottom:18px; }
+        .rt-card {
+            background: rgba(0,10,30,.8);
+            border: 1px solid rgba(0,229,255,.15);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex; align-items:center; justify-content:space-between;
+        }
+        .rt-label { font-size:.75rem; color:rgba(200,230,255,.5); letter-spacing:1px; }
+        .rt-value { font-family:'Orbitron',monospace; font-size:1.5rem; font-weight:700; }
+
+        /* DATA TABLE */
+        .data-table-wrap { overflow-x:auto; margin-bottom:16px; }
+        .data-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+        .data-table th { padding:10px 14px; background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.1); color:var(--cyan); font-family:'Orbitron',monospace; font-size:.68rem; letter-spacing:1px; text-transform:uppercase; }
+        .data-table td { padding:10px 14px; border:1px solid rgba(0,229,255,.07); color:rgba(200,230,255,.8); font-family:'Orbitron',monospace; font-size:.78rem; text-align:center; }
+        .data-table tr:nth-child(even) td { background:rgba(0,229,255,.03); }
+
+        /* BUTTONS */
+        .btn-record {
+            background:linear-gradient(135deg,rgba(0,255,157,.15),rgba(0,255,157,.05));
+            border:1px solid var(--green); border-radius:10px; padding:11px 20px;
+            color:var(--green); font-family:'Orbitron',monospace; font-size:.75rem;
+            letter-spacing:2px; cursor:pointer; transition:all .2s; margin-right:10px; margin-bottom:8px;
+        }
+        .btn-record:hover { background:rgba(0,255,157,.2); box-shadow:0 0 16px rgba(0,255,157,.3); }
+        .btn-clear {
+            background:rgba(255,79,79,.08); border:1px solid rgba(255,79,79,.3); border-radius:10px;
+            padding:11px 20px; color:var(--red); font-family:'Orbitron',monospace; font-size:.75rem;
+            letter-spacing:2px; cursor:pointer; transition:all .2s; margin-bottom:8px;
+        }
+        .btn-clear:hover { background:rgba(255,79,79,.15); }
+        .btn-next {
+            background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(0,229,255,.05));
+            border:2px solid var(--cyan); border-radius:12px; padding:13px 28px;
+            color:var(--cyan); font-family:'Orbitron',monospace; font-size:.78rem;
+            letter-spacing:2px; cursor:pointer; transition:all .25s; margin-top:16px;
+        }
+        .btn-next:hover { background:rgba(0,229,255,.2); box-shadow:0 0 20px rgba(0,229,255,.3); transform:translateY(-2px); }
+        .btn-tinkercad {
+            display:inline-flex; align-items:center; gap:8px;
+            background:linear-gradient(135deg,rgba(255,140,0,.15),rgba(255,140,0,.05));
+            border:1px solid var(--orange); border-radius:10px; padding:12px 20px;
+            color:var(--orange); font-family:'Rajdhani',sans-serif; font-size:.9rem; font-weight:600;
+            cursor:pointer; transition:all .2s; text-decoration:none; margin-right:10px; margin-bottom:8px;
+        }
+        .btn-tinkercad:hover { background:rgba(255,140,0,.2); box-shadow:0 0 16px rgba(255,140,0,.3); }
+        .btn-complete {
+            background:linear-gradient(135deg,rgba(191,95,255,.2),rgba(191,95,255,.08));
+            border:2px solid var(--purple); border-radius:12px; padding:14px 32px;
+            color:var(--purple); font-family:'Orbitron',monospace; font-size:.82rem;
+            letter-spacing:2px; cursor:pointer; transition:all .25s; margin-top:20px;
+            box-shadow:0 0 20px rgba(191,95,255,.2);
+        }
+        .btn-complete:hover { background:rgba(191,95,255,.25); box-shadow:0 0 30px rgba(191,95,255,.4); transform:translateY(-2px); }
+
+        /* EXP CHAT */
+        .exp-chat-wrap {
+            background: var(--bg-panel);
+            border: 1px solid rgba(0,255,157,.15);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        .exp-chat-header { padding:12px 18px; background:rgba(0,10,30,.6); border-bottom:1px solid rgba(0,255,157,.12); display:flex; align-items:center; gap:10px; }
+        .exp-chat-header span { font-family:'Orbitron',monospace; font-size:.72rem; color:var(--teal); letter-spacing:2px; }
+        .exp-chat-box { height:220px; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+        .exp-chat-box::-webkit-scrollbar{width:3px} .exp-chat-box::-webkit-scrollbar-thumb{background:rgba(0,255,200,.2);border-radius:2px}
+        .exp-chat-input { display:flex; gap:8px; padding:12px 16px; border-top:1px solid rgba(0,255,157,.1); background:rgba(0,5,15,.4); }
+        .exp-chat-input input { flex:1; background:rgba(0,10,30,.8); border:1px solid rgba(0,255,200,.2); border-radius:8px; padding:9px 14px; color:#c8e6ff; font-family:'Rajdhani',sans-serif; font-size:.85rem; outline:none; }
+        .exp-chat-input input:focus { border-color:rgba(0,255,200,.5); }
+        .exp-chat-send { background:rgba(0,255,200,.1); border:1px solid rgba(0,255,200,.3); border-radius:8px; padding:9px 14px; color:var(--teal); cursor:pointer; transition:all .2s; }
+        .exp-chat-send:hover { background:rgba(0,255,200,.2); }
+
+        /* AI ANALYSIS */
+        .ai-analysis {
+            background: linear-gradient(135deg, rgba(191,95,255,.07), rgba(0,229,255,.04));
+            border: 1px solid rgba(191,95,255,.2);
+            border-radius: 14px;
+            padding: 22px;
+            margin-top: 20px;
+        }
+        .ai-analysis-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+        .ai-analysis-header span { font-family:'Orbitron',monospace; font-size:.75rem; color:var(--purple); letter-spacing:2px; }
+        .ai-analysis-text { font-size:.9rem; color:rgba(200,230,255,.85); line-height:1.9; white-space:pre-wrap; }
+        .ai-analysis-loading { display:flex; align-items:center; gap:10px; color:rgba(200,230,255,.5); font-size:.85rem; }
+
+        /* INPUT FIELD */
+        .exp-input { background:rgba(0,10,30,.8); border:1px solid rgba(0,229,255,.2); border-radius:8px; padding:10px 14px; color:#c8e6ff; font-family:'Rajdhani',sans-serif; font-size:.92rem; outline:none; width:100%; margin-bottom:10px; transition:border-color .2s; }
+        .exp-input:focus { border-color:rgba(0,229,255,.5); }
+        .input-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+        .input-label { font-size:.75rem; color:rgba(200,230,255,.5); letter-spacing:1px; margin-bottom:5px; }
+
+        /* V-A CHART */
+        .va-chart-wrap { background:rgba(0,10,30,.6); border:1px solid rgba(255,230,0,.15); border-radius:12px; padding:18px; margin-top:16px; }
+        .va-chart-wrap .vc-title { font-family:'Orbitron',monospace; font-size:.72rem; color:var(--yellow); letter-spacing:2px; margin-bottom:12px; }
+
+        /* BREADCRUMB */
+        .exp-breadcrumb { display:flex; align-items:center; gap:8px; margin-bottom:18px; font-size:.8rem; color:rgba(200,230,255,.4); }
+        .exp-breadcrumb a { color:var(--cyan); cursor:pointer; text-decoration:none; }
+        .exp-breadcrumb a:hover { text-decoration:underline; }
+        .exp-breadcrumb span { color:rgba(200,230,255,.25); }
+
+        /* SECTION LABEL */
+        .section-label { font-family:'Orbitron',monospace; font-size:.72rem; letter-spacing:3px; text-transform:uppercase; margin:24px 0 12px; padding:8px 14px; background:rgba(0,229,255,.06); border:1px solid rgba(0,229,255,.15); border-radius:8px; display:inline-block; color:var(--cyan); }
+
+        /* ===== BÁO CÁO HỌC SINH MODAL ===== */
+        #reportModal {
+            display: none; position: fixed; inset: 0; z-index: 999;
+            background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+            overflow-y: auto; padding: 30px 20px;
+        }
+        #reportModal.open { display: flex; align-items: flex-start; justify-content: center; }
+        .report-modal-box {
+            background: linear-gradient(180deg, rgba(3,12,35,.98), rgba(5,18,50,.96));
+            border: 1px solid rgba(0,229,255,.25);
+            border-radius: 20px;
+            width: 100%; max-width: 760px;
+            box-shadow: 0 24px 80px rgba(0,0,0,.7), 0 0 60px rgba(0,229,255,.06);
+            overflow: hidden;
+        }
+        .report-modal-header {
+            padding: 24px 28px 20px;
+            border-bottom: 1px solid rgba(0,229,255,.15);
+            background: rgba(0,229,255,.04);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .report-modal-header h2 {
+            font-family: 'Orbitron', monospace; font-size: 1rem; color: var(--cyan);
+            letter-spacing: 2px; font-weight: 700;
+        }
+        .report-modal-header p { font-size: .78rem; color: rgba(200,230,255,.45); margin-top: 3px; }
+        .report-close-btn {
+            background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+            border-radius: 8px; padding: 8px 14px; color: rgba(200,230,255,.5);
+            cursor: pointer; font-size: .85rem; transition: all .2s;
+        }
+        .report-close-btn:hover { background: rgba(255,80,80,.1); border-color: rgba(255,80,80,.3); color: #ff6b6b; }
+        .report-modal-body { padding: 28px; }
+        .report-section {
+            margin-bottom: 24px;
+            background: rgba(0,10,30,.5);
+            border: 1px solid rgba(0,229,255,.1);
+            border-radius: 14px;
+            padding: 20px;
+        }
+        .report-section-title {
+            font-family: 'Orbitron', monospace; font-size: .72rem; letter-spacing: 2px;
+            text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        }
+        .report-label { font-size: .8rem; color: rgba(200,230,255,.55); margin-bottom: 7px; letter-spacing: .5px; }
+        .report-input {
+            width: 100%; background: rgba(0,10,30,.8); border: 1px solid rgba(0,229,255,.18);
+            border-radius: 9px; padding: 11px 14px; color: #c8e6ff;
+            font-family: 'Rajdhani', sans-serif; font-size: .9rem; outline: none;
+            transition: border-color .2s; resize: vertical; min-height: 70px;
+        }
+        .report-input:focus { border-color: rgba(0,229,255,.45); }
+        .report-input::placeholder { color: rgba(200,230,255,.25); }
+        .report-input-sm { min-height: unset; height: 44px; resize: none; }
+        .attitude-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 4px; }
+        .attitude-btn {
+            padding: 10px 8px; border-radius: 10px; border: 1px solid rgba(0,229,255,.15);
+            background: rgba(0,10,30,.6); color: rgba(200,230,255,.5);
+            font-size: .8rem; cursor: pointer; text-align: center; transition: all .2s;
+            font-family: 'Rajdhani', sans-serif;
+        }
+        .attitude-btn:hover { border-color: rgba(0,229,255,.35); color: var(--cyan); }
+        .attitude-btn.selected { background: rgba(0,229,255,.12); border-color: var(--cyan); color: var(--cyan); font-weight: 600; }
+        .attitude-btn.sel-green { background: rgba(0,255,157,.1); border-color: var(--green); color: var(--green); }
+        .attitude-btn.sel-yellow { background: rgba(255,230,0,.1); border-color: var(--yellow); color: var(--yellow); }
+        .attitude-btn.sel-orange { background: rgba(255,140,0,.1); border-color: var(--orange); color: var(--orange); }
+        .attitude-btn.sel-red { background: rgba(255,79,79,.1); border-color: var(--red); color: var(--red); }
+        .stars-row { display: flex; gap: 8px; margin-top: 4px; }
+        .star-btn { font-size: 1.5rem; cursor: pointer; transition: transform .15s; opacity: .35; }
+        .star-btn.lit { opacity: 1; filter: drop-shadow(0 0 6px #ffe600); }
+        .star-btn:hover { transform: scale(1.2); }
+        .report-ai-box {
+            background: rgba(0,229,255,.04); border: 1px solid rgba(0,229,255,.15);
+            border-radius: 12px; padding: 18px; margin-top: 16px; min-height: 80px;
+            font-size: .87rem; line-height: 1.8; color: rgba(200,230,255,.85);
+            white-space: pre-wrap;
+        }
+        .report-gen-btn {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(0,229,255,.15), rgba(0,200,255,.08));
+            border: 1px solid rgba(0,229,255,.35); border-radius: 11px;
+            padding: 14px; color: var(--cyan); font-family: 'Orbitron', monospace;
+            font-size: .78rem; letter-spacing: 2px; font-weight: 700; cursor: pointer;
+            transition: all .25s; margin-bottom: 14px;
+        }
+        .report-gen-btn:hover { background: rgba(0,229,255,.22); box-shadow: 0 0 20px rgba(0,229,255,.25); }
+        .report-export-btn {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(0,255,157,.15), rgba(0,200,130,.08));
+            border: 1px solid rgba(0,255,157,.35); border-radius: 11px;
+            padding: 14px; color: var(--green); font-family: 'Orbitron', monospace;
+            font-size: .78rem; letter-spacing: 2px; font-weight: 700; cursor: pointer;
+            transition: all .25s;
+        }
+        .report-export-btn:hover { background: rgba(0,255,157,.22); box-shadow: 0 0 20px rgba(0,255,157,.25); }
+        .report-export-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .knowledge-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .know-item {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(0,10,30,.6); border: 1px solid rgba(0,229,255,.1);
+            border-radius: 9px; padding: 10px 12px; cursor: pointer; transition: all .2s;
+        }
+        .know-item.checked { background: rgba(0,255,157,.07); border-color: rgba(0,255,157,.3); }
+        .know-check { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid rgba(0,229,255,.3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: .75rem; transition: all .2s; }
+        .know-item.checked .know-check { background: var(--green); border-color: var(--green); }
+        .know-text { font-size: .82rem; color: rgba(200,230,255,.65); }
+        .know-item.checked .know-text { color: rgba(200,255,220,.85); }
+        .difficulty-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+        .diff-tag {
+            padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(0,229,255,.15);
+            background: rgba(0,10,30,.6); color: rgba(200,230,255,.5);
+            font-size: .78rem; cursor: pointer; transition: all .2s; font-family: 'Rajdhani', sans-serif;
+        }
+        .diff-tag:hover { border-color: rgba(0,229,255,.35); color: var(--cyan); }
+        .diff-tag.sel { background: rgba(255,45,120,.1); border-color: var(--pink); color: var(--pink); }
+
+        /* ========== HAMBURGER TOGGLE (mobile) ========== */
+        #sidebar-overlay {
+            display: none; position: fixed; inset: 0; z-index: 98;
+            background: rgba(0,0,0,.6); backdrop-filter: blur(3px);
+        }
+        #sidebar-toggle {
+            display: none; position: fixed; top: 12px; left: 12px; z-index: 200;
+            background: rgba(0,10,30,.95); border: 1px solid rgba(0,229,255,.35);
+            border-radius: 10px; width: 44px; height: 44px;
+            align-items: center; justify-content: center;
+            cursor: pointer; font-size: 1.25rem; color: var(--cyan);
+            box-shadow: 0 4px 20px rgba(0,0,0,.5);
+            transition: background .2s, box-shadow .2s;
+        }
+        #sidebar-toggle:hover { background: rgba(0,229,255,.1); box-shadow: 0 0 16px rgba(0,229,255,.3); }
+
+        /* ========== EXPERIMENT LAYOUT UTILITIES ========== */
+        /* RT display: responsive grid helper */
+        .rt-display-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+        .rt-display-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+
+        /* Button group: wraps cleanly on small screens */
+        .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+        .btn-group .btn-record,
+        .btn-group .btn-clear { margin-right: 0; margin-bottom: 0; }
+
+        /* Step wizard progress indicator (compact dot mode on very small screens) */
+        .step-progress { display: none; align-items: center; gap: 6px; margin-bottom: 14px; font-size: .75rem; color: rgba(200,230,255,.5); font-family: 'Orbitron', monospace; letter-spacing: 1px; }
+        .step-progress-dots { display: flex; gap: 5px; }
+        .step-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,229,255,.2); border: 1px solid rgba(0,229,255,.25); transition: all .25s; }
+        .step-dot.done { background: var(--green); border-color: var(--green); }
+        .step-dot.active { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,229,255,.6); width: 22px; border-radius: 4px; }
+
+        /* Exp chat: taller on desktop, shorter on mobile */
+        .exp-chat-box { height: 220px; }
+
+        /* ========== LARGE DESKTOP (>1280px) ========== */
+        @media(min-width:1280px) {
+            #main { padding: 34px 40px; }
+            .metric-cards { grid-template-columns: repeat(3, 1fr); }
+            .calc-grid { grid-template-columns: repeat(3, 1fr); }
+            .chat-layout { grid-template-columns: 1fr 280px; height: calc(100vh - 140px); }
+            .exp-list-grid { grid-template-columns: repeat(3, 1fr); }
+            .exp-chat-box { height: 260px; }
+            .rt-display { grid-template-columns: 1fr 1fr; }
+            .input-row { grid-template-columns: 1fr 1fr; }
+            .knowledge-checks { grid-template-columns: 1fr 1fr; }
+            .attitude-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ========== TABLET LANDSCAPE + SMALL LAPTOP (1024px–1279px) ========== */
+        @media(max-width:1279px) and (min-width:1025px) {
+            :root { --sidebar-w: 200px; }
+            #main { padding: 26px 28px; }
+            .metric-cards { grid-template-columns: repeat(3, 1fr); }
+            .calc-grid { grid-template-columns: repeat(3, 1fr); }
+            .chat-layout { grid-template-columns: 1fr 240px; height: calc(100vh - 140px); }
+            .exp-list-grid { grid-template-columns: repeat(2, 1fr); }
+            .exp-chat-box { height: 230px; }
+            .rt-display { grid-template-columns: 1fr 1fr; }
+            .input-row { grid-template-columns: 1fr 1fr; }
+            .knowledge-checks { grid-template-columns: 1fr 1fr; }
+            .attitude-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ========== TABLET PORTRAIT (768px–1024px) ========== */
+        @media(max-width:1024px) and (min-width:769px) {
+            :root { --sidebar-w: 186px; }
+            #main { padding: 24px 22px; }
+
+            /* Headers */
+            .page-header h1 { font-size: 1.05rem; letter-spacing: 2px; }
+
+            /* Metric cards: 2 columns, 3rd wraps alone */
+            .metric-cards { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+            .metric-value { font-size: 1.75rem; }
+            .metric-card:last-child { grid-column: 1 / -1; max-width: 50%; margin: 0 auto; width: 100%; }
+
+            /* Calc grid: 3 cols */
+            .calc-grid { grid-template-columns: repeat(3, 1fr); }
+
+            /* Step wizard: compact but still text labels */
+            .step-wizard { flex-wrap: wrap; gap: 6px; }
+            .step-btn { padding: 9px 12px; font-size: .7rem; }
+            .step-btn .step-circle { width: 20px; height: 20px; font-size: .65rem; }
+            .step-connector { width: 8px; }
+
+            /* Stage box: slightly less padding */
+            .stage-box { padding: 22px 20px; }
+
+            /* RT cards: side by side */
+            .rt-display { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .rt-value { font-size: 1.4rem; }
+
+            /* Input row: 2 cols */
+            .input-row { grid-template-columns: 1fr 1fr; }
+
+            /* Exp list: 2 columns */
+            .exp-list-grid { grid-template-columns: repeat(2, 1fr); }
+
+            /* Chat: stack vertically, sidebar side by side */
+            .chat-layout { grid-template-columns: 1fr; height: auto; gap: 16px; }
+            .chat-main { height: 60vh; min-height: 420px; }
+            .chat-sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+            /* Charts: slightly smaller */
+            canvas { max-height: 140px !important; }
+
+            /* Knowledge checks: 2 cols */
+            .knowledge-checks { grid-template-columns: 1fr 1fr; }
+
+            /* Attitude grid: 4 cols */
+            .attitude-grid { grid-template-columns: repeat(4, 1fr); }
+
+            /* Exp chat */
+            .exp-chat-box { height: 200px; }
+
+            /* CTA banner: keep row on tablet */
+            .exp-cta-banner { padding: 22px 24px; gap: 18px; }
+            .exp-cta-btn { padding: 14px 22px; }
+
+            /* Panel inline stat */
+            .panel[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* ========== MOBILE (≤768px) ========== */
+        @media(max-width:768px) {
+            :root { --sidebar-w: 248px; }
+
+            /* Hamburger visible */
+            #sidebar-toggle { display: flex; }
+
+            /* Sidebar slides in from left */
+            #sidebar {
+                transform: translateX(-100%);
+                transition: transform .3s cubic-bezier(.4,0,.2,1);
+            }
+            #sidebar.open {
+                transform: translateX(0);
+                box-shadow: 8px 0 48px rgba(0,0,0,.75);
+            }
+            #sidebar-overlay.open { display: block; }
+
+            /* Main: full width, top padding for hamburger */
+            #main {
+                margin-left: 0 !important;
+                padding: 68px 14px 28px;
+            }
+
+            /* Page header */
+            .page-header { margin-bottom: 16px; padding-bottom: 12px; }
+            .page-header h1 { font-size: .98rem; letter-spacing: 1.5px; }
+            .page-header p { font-size: .76rem; }
+
+            /* Status bar */
+            .status-bar { padding: 10px 12px; gap: 8px; flex-wrap: wrap; border-radius: 10px; }
+            .status-text { font-size: .75rem; }
+
+            /* Metric cards → 1 column */
+            .metric-cards { grid-template-columns: 1fr; gap: 10px; }
+            .metric-card { padding: 15px 14px; border-radius: 14px; }
+            .metric-card:last-child { max-width: none; }
+            .metric-value { font-size: 2.1rem; }
+
+            /* Calc grid → 2 columns */
+            .calc-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+            .calc-box { padding: 12px 8px; border-radius: 8px; }
+            .calc-val { font-size: 1rem; }
+            .calc-label { font-size: .61rem; }
+
+            /* Panel */
+            .panel { padding: 14px 12px; border-radius: 12px; margin-bottom: 14px; }
+
+            /* CTA banner: stack vertically */
+            .exp-cta-banner { flex-direction: column; text-align: center; padding: 18px 14px; gap: 12px; border-radius: 14px; }
+            .exp-cta-btn { margin-left: 0; width: 100%; padding: 14px 16px; font-size: .78rem; }
+            .exp-cta-banner .cta-icon { font-size: 2.2rem; }
+            .exp-cta-banner .cta-text h2 { font-size: .88rem; }
+            .exp-cta-banner .cta-text p { font-size: .78rem; }
+
+            /* Exp list: 1 column */
+            .exp-list-grid { grid-template-columns: 1fr; gap: 12px; }
+            .exp-card { padding: 16px 14px; }
+            .exp-card .exp-num { font-size: 1.8rem; }
+            .exp-card .exp-icon { font-size: 1.7rem; margin-bottom: 8px; }
+            .exp-card h3 { font-size: .95rem; }
+
+            /* ── STEP WIZARD: icon-only scrollable bar ── */
+            .step-wizard {
+                overflow-x: auto; flex-wrap: nowrap;
+                padding: 4px 2px 10px; gap: 3px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                margin-bottom: 16px;
+            }
+            .step-wizard::-webkit-scrollbar { display: none; }
+            .step-btn {
+                padding: 8px 10px; font-size: .62rem;
+                flex-shrink: 0; white-space: nowrap;
+                border-radius: 8px; gap: 5px;
+            }
+            .step-btn .step-circle { width: 18px; height: 18px; font-size: .6rem; }
+            .step-connector { width: 5px; flex-shrink: 0; }
+
+            /* Show dot progress bar on mobile */
+            .step-progress { display: flex; }
+
+            /* ── STAGE BOX ── */
+            .stage-box { padding: 14px 12px; border-radius: 14px; margin-bottom: 14px; }
+            .stage-title { font-size: .76rem; gap: 8px; margin-bottom: 14px; }
+            .stage-title .stage-icon { font-size: 1.1rem; }
+
+            /* AI guide */
+            .ai-guide { padding: 14px; border-radius: 12px; }
+            .ai-guide-text { font-size: .84rem; line-height: 1.7; }
+
+            /* ── RT DISPLAY: full width cards, side by side ── */
+            .rt-display { grid-template-columns: 1fr 1fr !important; gap: 10px; margin-bottom: 14px; }
+            .rt-card { padding: 12px 10px; border-radius: 10px; flex-direction: column; align-items: flex-start; gap: 4px; }
+            .rt-label { font-size: .68rem; }
+            .rt-value { font-size: 1.25rem; }
+
+            /* Input row → 1 column on mobile */
+            .input-row { grid-template-columns: 1fr; gap: 8px; }
+            .exp-input { font-size: .88rem; padding: 9px 12px; }
+
+            /* ── BUTTONS: full-width stacked ── */
+            .btn-group { flex-direction: column; gap: 8px; }
+            .btn-group .btn-record,
+            .btn-group .btn-clear,
+            .btn-group .btn-tinkercad { width: 100%; margin-right: 0; margin-bottom: 0; text-align: center; justify-content: center; }
+            .btn-record, .btn-clear { padding: 12px 16px; font-size: .7rem; width: 100%; margin-right: 0; margin-bottom: 0; }
+            .btn-next { padding: 13px 20px; font-size: .72rem; width: 100%; text-align: center; margin-top: 14px; }
+            .btn-complete { padding: 14px 20px; font-size: .76rem; width: 100%; text-align: center; margin-top: 16px; }
+            .btn-tinkercad { width: 100%; justify-content: center; text-align: center; margin-right: 0; margin-bottom: 0; }
+
+            /* ── DATA TABLE: scrollable, bigger touch targets ── */
+            .data-table-wrap { border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+            .data-table th { padding: 9px 8px; font-size: .65rem; }
+            .data-table td { padding: 9px 8px; font-size: .7rem; }
+
+            /* ── EXP CHAT ── */
+            .exp-chat-wrap { border-radius: 12px; margin-top: 14px; }
+            .exp-chat-box { height: 170px; }
+            .exp-chat-input { padding: 10px 12px; gap: 7px; }
+            .exp-chat-input input { font-size: .82rem; padding: 9px 11px; }
+            .exp-chat-send { padding: 9px 12px; }
+
+            /* ── AI ANALYSIS ── */
+            .ai-analysis { padding: 14px 12px; border-radius: 12px; }
+            .ai-analysis-text { font-size: .84rem; line-height: 1.75; }
+
+            /* ── V-A CHART ── */
+            .va-chart-wrap { padding: 14px; border-radius: 10px; }
+
+            /* ── CHAT PAGE ── */
+            .chat-layout { grid-template-columns: 1fr; height: auto; gap: 12px; }
+            .chat-main { height: 62vh; min-height: 380px; }
+            .chat-sidebar { display: flex; flex-direction: column; gap: 12px; }
+            #chatBox { padding: 12px; gap: 9px; }
+            .bubble { max-width: 90%; font-size: .83rem; padding: 10px 12px; }
+            .chat-input-area { padding: 11px 12px; gap: 8px; }
+            #userInput { padding: 10px 12px; font-size: .87rem; }
+            .send-btn { padding: 10px 14px; }
+            .quick-btn { padding: 10px 12px; font-size: .78rem; }
+
+            /* ── CHARTS ── */
+            .chart-wrap { padding: 12px; border-radius: 12px; margin-bottom: 12px; }
+            .chart-title { font-size: .68rem; margin-bottom: 10px; }
+            canvas { max-height: 120px !important; }
+
+            /* ── KNOWLEDGE CHECKS ── */
+            .knowledge-checks { grid-template-columns: 1fr; gap: 8px; }
+            .know-item { padding: 10px 10px; }
+            .know-text { font-size: .8rem; }
+
+            /* ── ATTITUDE GRID ── */
+            .attitude-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .attitude-btn { padding: 10px 6px; font-size: .78rem; }
+
+            /* ── REPORT MODAL ── */
+            #reportModal { padding: 14px 8px; }
+            .report-modal-box { border-radius: 14px; }
+            .report-modal-header { padding: 16px 16px 12px; }
+            .report-modal-header h2 { font-size: .82rem; }
+            .report-modal-body { padding: 14px 12px; }
+            .report-section { padding: 14px 12px; border-radius: 10px; margin-bottom: 16px; }
+            .report-gen-btn, .report-export-btn { padding: 13px; font-size: .72rem; }
+
+            /* ── NAV SIDEBAR: larger tap targets on mobile ── */
+            .nav-item { padding: 15px 20px; font-size: .98rem; }
+            .sidebar-logo h2 { font-size: .78rem; }
+            .nav-exp-sub { font-size: .84rem; padding: 12px 20px 12px 52px; }
+
+            /* Section label */
+            .section-label { font-size: .63rem; padding: 6px 10px; display: block; width: max-content; }
+
+            /* Inline stat panel (home page grid) */
+            .panel[style*="grid-template-columns:1fr 1fr"],
+            .panel[style*="grid-template-columns: 1fr 1fr"] {
+                display: flex !important; flex-direction: column; gap: 12px;
+            }
+
+            /* Breadcrumb */
+            .exp-breadcrumb { font-size: .75rem; gap: 6px; margin-bottom: 14px; }
+
+            /* Difficulty tags: wrap nicely */
+            .difficulty-row { gap: 6px; }
+            .diff-tag { padding: 6px 12px; font-size: .76rem; }
+        }
+
+        /* ========== SMALL MOBILE (≤420px) ========== */
+        @media(max-width:420px) {
+            #main { padding: 64px 10px 24px; }
+            .metric-value { font-size: 1.85rem; }
+            .calc-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .calc-val { font-size: .9rem; }
+            .page-header h1 { font-size: .88rem; letter-spacing: 1px; }
+            .exp-cta-banner .cta-text h2 { font-size: .82rem; }
+            .bubble { max-width: 95%; font-size: .8rem; }
+            .attitude-grid { grid-template-columns: repeat(2, 1fr); }
+            .sidebar-logo h2 { font-size: .7rem; }
+            .step-btn { padding: 7px 8px; font-size: .58rem; }
+            .rt-value { font-size: 1.15rem; }
+            .rt-card { padding: 10px 8px; }
+            .data-table th, .data-table td { padding: 7px 6px; font-size: .62rem; }
+            .exp-chat-box { height: 150px; }
+            .stage-box { padding: 12px 10px; }
+            .panel { padding: 12px 10px; }
+            .exp-card h3 { font-size: .88rem; }
+            .btn-next, .btn-complete { font-size: .68rem; padding: 12px 16px; }
+            .know-text { font-size: .76rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- MOBILE OVERLAY -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- HAMBURGER BUTTON (mobile only) -->
+<button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+    <div class="sidebar-logo">
+        <span class="logo-icon">⚡</span>
+        <h2>ESP32-S3<br>Điện Học</h2>
+        <p>REALTIME MONITOR</p>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-label">Menu</div>
+        <a class="nav-item active" onclick="switchPage('experiments',this);return false;" href="#" id="nav-experiments">
+            <span class="nav-icon">🧪</span> Thí Nghiệm
+        </a>
+        <div id="exp-sub-nav" style="display:none;">
+            <div class="nav-exp-sub" onclick="openExperiment(0)">⚡ TN1: Dòng điện</div>
+            <div class="nav-exp-sub" onclick="openExperiment(1)">📐 TN2: Điện trở V-A</div>
+            <div class="nav-exp-sub" onclick="openExperiment(2)">🔋 TN3: Nguồn điện</div>
+            <div class="nav-exp-sub" onclick="openExperiment(3)">⏱️ TN4: Tiêu thụ điện</div>
+            <div class="nav-exp-sub" onclick="openExperiment(4)">💡 TN5: Công suất điện</div>
+        </div>
+        <a class="nav-item" onclick="switchPage('charts',this);return false;" href="#">
+            <span class="nav-icon">📈</span> Biểu Đồ
+        </a>
+        <a class="nav-item" onclick="switchPage('chat',this);return false;" href="#">
+            <span class="nav-icon">🤖</span> Chatbot AI
+        </a>
+        <a class="nav-item" onclick="switchPage('home',this);return false;" href="#">
+            <span class="nav-icon">🖥️</span> Thiết Bị
+        </a>
+    </div>
+    <div class="sidebar-footer">ESP32-S3 · Flask · Cloudflare</div>
+</nav>
+
+<!-- MAIN -->
+<main id="main">
+
+    <!-- TRANG CHỦ -->
+    <div class="page" id="page-home">
+        <div class="page-header">
+            <h1>⚡ Giám Sát Thời Gian Thực</h1>
+            <p>1 cảm biến dòng · 2 cảm biến điện áp · Cập nhật mỗi 1 giây</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-dot" id="statusDot"></div>
+            <span class="status-text" id="statusText">Đang chờ dữ liệu...</span>
+            <span class="status-time" id="statusTime">--:--:--</span>
+        </div>
+
+        <!-- 3 Metric Cards -->
+        <div class="metric-cards">
+            <div class="metric-card card-I">
+                <div class="glow-bg"></div>
+                <div class="metric-label">⚡ Dòng Điện</div>
+                <div class="metric-name">Cường độ dòng điện I</div>
+                <div class="metric-value" id="valI">—</div>
+                <div class="metric-unit">AMPERE (A)</div>
+            </div>
+            <div class="metric-card card-U1">
+                <div class="glow-bg"></div>
+                <div class="metric-label">🔋 Điện Áp 1</div>
+                <div class="metric-name">Hiệu điện thế U₁</div>
+                <div class="metric-value" id="valU1">—</div>
+                <div class="metric-unit">VOLT (V)</div>
+            </div>
+            <div class="metric-card card-U2">
+                <div class="glow-bg"></div>
+                <div class="metric-label">🔋 Điện Áp 2</div>
+                <div class="metric-name">Hiệu điện thế U₂</div>
+                <div class="metric-value" id="valU2">—</div>
+                <div class="metric-unit">VOLT (V)</div>
+            </div>
+        </div>
+
+        <!-- CTA Thí nghiệm -->
+        <div class="exp-cta-banner">
+            <div class="cta-icon">🧪</div>
+            <div class="cta-text">
+                <h2>🧪 BẮT ĐẦU THÍ NGHIỆM THỰC HÀNH</h2>
+                <p>5 thí nghiệm thực hành chương Dòng điện – Mạch điện lớp 11<br>
+                <span style="color:rgba(0,229,255,.7);">Sách Kết nối tri thức và cuộc sống</span> · AI dẫn dắt · ESP32-S3 thời gian thực</p>
+            </div>
+
+        </div>
+
+        <!-- Thông số tính toán -->
+        <div class="panel">
+            <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;">
+                📊 Thông Số Tính Toán
+            </div>
+            <div class="calc-grid">
+                <div class="calc-box">
+                    <div class="calc-label">Công suất P₁ = U₁×I</div>
+                    <div class="calc-val" style="color:var(--pink);" id="calcP1">—</div>
+                    <div class="calc-unit">Watt (W)</div>
+                </div>
+                <div class="calc-box">
+                    <div class="calc-label">Điện trở R₁ = U₁/I</div>
+                    <div class="calc-val" style="color:var(--orange);" id="calcR1">—</div>
+                    <div class="calc-unit">Ohm (Ω)</div>
+                </div>
+                <div class="calc-box">
+                    <div class="calc-label">Nhiệt lượng Q₁ = P₁×t</div>
+                    <div class="calc-val" style="color:var(--green);" id="calcQ1">—</div>
+                    <div class="calc-unit">Joule (J)</div>
+                </div>
+                <div class="calc-box">
+                    <div class="calc-label">Công suất P₂ = U₂×I</div>
+                    <div class="calc-val" style="color:var(--pink);" id="calcP2">—</div>
+                    <div class="calc-unit">Watt (W)</div>
+                </div>
+                <div class="calc-box">
+                    <div class="calc-label">Điện trở R₂ = U₂/I</div>
+                    <div class="calc-val" style="color:var(--red);" id="calcR2">—</div>
+                    <div class="calc-unit">Ohm (Ω)</div>
+                </div>
+                <div class="calc-box">
+                    <div class="calc-label">Nhiệt lượng Q₂ = P₂×t</div>
+                    <div class="calc-val" style="color:var(--teal);" id="calcQ2">—</div>
+                    <div class="calc-unit">Joule (J)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Số mẫu + V drift -->
+        <div class="panel" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;">
+            <div style="text-align:center;">
+                <div style="font-size:.68rem;color:rgba(200,230,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Số điểm đã nhận</div>
+                <div style="font-family:'Orbitron',monospace;font-size:1.6rem;color:var(--green);" id="calcCount">0</div>
+                <div style="font-size:.68rem;color:rgba(200,230,255,.35);margin-top:4px;">Samples</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:.68rem;color:rgba(200,230,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Vận tốc drift V</div>
+                <div style="font-family:'Orbitron',monospace;font-size:1.1rem;color:var(--cyan);" id="calcV">—</div>
+                <div style="font-size:.68rem;color:rgba(200,230,255,.35);margin-top:4px;">× 10⁻⁵ m/s</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BIỂU ĐỒ -->
+    <div class="page" id="page-charts">
+        <div class="page-header">
+            <h1>📈 Biểu Đồ Dữ Liệu</h1>
+            <p>7 biểu đồ · Lịch sử tối đa 60 điểm gần nhất</p>
+        </div>
+
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--cyan);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;padding:8px 14px;background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.15);border-radius:8px;display:inline-block;">
+            📡 Đầu Vào Cảm Biến
+        </div>
+        <div class="chart-wrap cI">
+            <div class="chart-title">⚡ Cường Độ Dòng Điện I (A)</div>
+            <canvas id="chartI"></canvas>
+        </div>
+        <div class="chart-wrap cU1">
+            <div class="chart-title">🔋 Hiệu Điện Thế U₁ (V)</div>
+            <canvas id="chartU1"></canvas>
+        </div>
+        <div class="chart-wrap cU2">
+            <div class="chart-title">🔋 Hiệu Điện Thế U₂ (V)</div>
+            <canvas id="chartU2"></canvas>
+        </div>
+
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--orange);letter-spacing:3px;text-transform:uppercase;margin:24px 0 12px;padding:8px 14px;background:rgba(255,140,0,.06);border:1px solid rgba(255,140,0,.2);border-radius:8px;display:inline-block;">
+            📐 Điện Trở
+        </div>
+        <div class="chart-wrap cR1">
+            <div class="chart-title">📐 Điện Trở R₁ = U₁/I (Ω)</div>
+            <canvas id="chartR1"></canvas>
+        </div>
+        <div class="chart-wrap cR2">
+            <div class="chart-title">📐 Điện Trở R₂ = U₂/I (Ω)</div>
+            <canvas id="chartR2"></canvas>
+        </div>
+
+        <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--green);letter-spacing:3px;text-transform:uppercase;margin:24px 0 12px;padding:8px 14px;background:rgba(0,255,157,.06);border:1px solid rgba(0,255,157,.2);border-radius:8px;display:inline-block;">
+            🌡️ Nhiệt Lượng Tích Lũy
+        </div>
+        <div class="chart-wrap cQ1">
+            <div class="chart-title">🌡️ Nhiệt Lượng Q₁ = P₁×t (J)</div>
+            <canvas id="chartQ1"></canvas>
+        </div>
+        <div class="chart-wrap cQ2">
+            <div class="chart-title">🌡️ Nhiệt Lượng Q₂ = P₂×t (J)</div>
+            <canvas id="chartQ2"></canvas>
+        </div>
+    </div>
+
+    <!-- CHATBOT -->
+    <div class="page" id="page-chat">
+        <div class="page-header">
+            <h1>🤖 Chatbot Điện Học</h1>
+            <p>Hỏi về I, U, P, R, Q và phân tích số liệu thời gian thực</p>
+        </div>
+        <div class="chat-layout">
+            <div class="chat-main">
+                <div class="chat-header">
+                    <div class="bot-avatar">🤖</div>
+                    <div>
+                        <div class="bot-name">AI Điện Học</div>
+                        <div class="bot-status">● Online</div>
+                    </div>
+                </div>
+                <div id="chatBox">
+                    <div class="msg-row">
+                        <div class="msg-avatar bot">🤖</div>
+                        <div class="bubble bot-b">
+                            Xin chào! Hệ thống có 1 cảm biến dòng (I) và 2 cảm biến điện áp (U₁, U₂). Tôi có thể giúp bạn hiểu về P, R, Q hoặc phân tích số liệu đang đo nhé! ⚡
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="userInput" placeholder="Hỏi về điện học..." />
+                    <button class="send-btn" onclick="sendMessage()">➤</button>
+                </div>
+            </div>
+            <div class="chat-sidebar">
+                <div class="quick-panel">
+                    <h4>💬 Câu Hỏi Nhanh</h4>
+                    <button class="quick-btn" onclick="quickAsk('Cường độ dòng điện là gì?')">⚡ Cường độ dòng điện?</button>
+                    <button class="quick-btn" onclick="quickAsk('Công thức tính công suất điện?')">⚡ Công suất P?</button>
+                    <button class="quick-btn" onclick="quickAsk('Điện trở R là gì? Đơn vị là gì?')">📐 Điện trở R?</button>
+                    <button class="quick-btn" onclick="quickAsk('Nhiệt lượng Q tỏa ra là gì? Công thức?')">🌡️ Nhiệt lượng Q?</button>
+                    <button class="quick-btn" onclick="quickAskWithData()">📊 Phân tích số liệu hiện tại</button>
+                    <button class="quick-btn" onclick="quickAsk('Định luật Ohm là gì?')">📐 Định luật Ohm</button>
+                </div>
+                <div class="context-panel">
+                    <h4>📡 Giá Trị Hiện Tại</h4>
+                    <div class="ctx-row"><span class="ctx-label">I (A)</span><span class="ctx-val" id="ctxI">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">U₁ (V)</span><span class="ctx-val" id="ctxU1">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">U₂ (V)</span><span class="ctx-val" id="ctxU2">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">R₁ (Ω)</span><span class="ctx-val" id="ctxR1">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">R₂ (Ω)</span><span class="ctx-val" id="ctxR2">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">Q₁ (J)</span><span class="ctx-val" id="ctxQ1">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">Q₂ (J)</span><span class="ctx-val" id="ctxQ2">—</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- THÍ NGHIỆM - DANH SÁCH -->
+    <div class="page active" id="page-experiments">
+        <div class="page-header">
+            <h1>🧪 Thí Nghiệm Thực Hành</h1>
+            <p>Chương Dòng điện – Mạch điện · Lớp 11 · Sách Kết nối tri thức và cuộc sống</p>
+        </div>
+
+        <div id="exp-list-view">
+            <div class="panel" style="margin-bottom:20px;">
+                <div style="font-family:'Orbitron',monospace;font-size:.8rem;color:var(--teal);letter-spacing:2px;margin-bottom:14px;">🎯 Quy Trình Học Tập Khoa Học</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                    <span style="padding:7px 14px;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:8px;font-size:.78rem;color:var(--cyan);">👁️ Quan sát</span>
+                    <span style="color:rgba(200,230,255,.3);font-size:1.2rem;">→</span>
+                    <span style="padding:7px 14px;background:rgba(255,230,0,.07);border:1px solid rgba(255,230,0,.2);border-radius:8px;font-size:.78rem;color:var(--yellow);">💡 Đặt giả thuyết</span>
+                    <span style="color:rgba(200,230,255,.3);font-size:1.2rem;">→</span>
+                    <span style="padding:7px 14px;background:rgba(255,140,0,.07);border:1px solid rgba(255,140,0,.2);border-radius:8px;font-size:.78rem;color:var(--orange);">⚗️ Thực nghiệm</span>
+                    <span style="color:rgba(200,230,255,.3);font-size:1.2rem;">→</span>
+                    <span style="padding:7px 14px;background:rgba(0,255,157,.07);border:1px solid rgba(0,255,157,.2);border-radius:8px;font-size:.78rem;color:var(--green);">📊 Phân tích</span>
+                    <span style="color:rgba(200,230,255,.3);font-size:1.2rem;">→</span>
+                    <span style="padding:7px 14px;background:rgba(191,95,255,.07);border:1px solid rgba(191,95,255,.2);border-radius:8px;font-size:.78rem;color:var(--purple);">✅ Kết luận</span>
+                </div>
+            </div>
+
+            <div class="exp-list-grid">
+                <div class="exp-card" onclick="openExperiment(0)">
+                    <div class="exp-num">01</div>
+                    <div class="exp-icon">⚡</div>
+                    <h3>Độ mạnh yếu của dòng điện</h3>
+                    <p>Hiểu cường độ dòng điện là đại lượng đặc trưng I. Quan sát mối liên hệ giữa I với độ sáng bóng đèn.</p>
+                    <span class="exp-badge" style="background:rgba(0,229,255,.1);color:var(--cyan);border:1px solid rgba(0,229,255,.2);">I · U · Ampe</span>
+                </div>
+                <div class="exp-card" onclick="openExperiment(1)">
+                    <div class="exp-num">02</div>
+                    <div class="exp-icon">📐</div>
+                    <h3>Điện trở & Đường đặc trưng Vôn–Ampe</h3>
+                    <p>Hiểu điện trở, định luật Ohm và vẽ đường đặc trưng V-A của vật dẫn.</p>
+                    <span class="exp-badge" style="background:rgba(255,230,0,.08);color:var(--yellow);border:1px solid rgba(255,230,0,.2);">R · V-A · Ohm</span>
+                </div>
+                <div class="exp-card" onclick="openExperiment(2)">
+                    <div class="exp-num">03</div>
+                    <div class="exp-icon">🔋</div>
+                    <h3>Nguồn điện – Điện trở trong</h3>
+                    <p>Chứng minh nguồn điện có điện trở trong r. Xác minh công thức U = E – Ir.</p>
+                    <span class="exp-badge" style="background:rgba(255,140,0,.08);color:var(--orange);border:1px solid rgba(255,140,0,.2);">E · r · Acquy</span>
+                </div>
+                <div class="exp-card" onclick="openExperiment(3)">
+                    <div class="exp-num">04</div>
+                    <div class="exp-icon">⏱️</div>
+                    <h3>Khảo sát tiêu thụ điện trong 10 giây</h3>
+                    <p>Tính điện lượng và nhiệt lượng Joule tỏa ra khi có dòng điện chạy qua trong 10 giây.</p>
+                    <span class="exp-badge" style="background:rgba(0,255,157,.07);color:var(--green);border:1px solid rgba(0,255,157,.2);">A · Q · Joule</span>
+                </div>
+                <div class="exp-card" onclick="openExperiment(4)">
+                    <div class="exp-num">05</div>
+                    <div class="exp-icon">💡</div>
+                    <h3>Công suất điện các thiết bị tiêu thụ</h3>
+                    <p>Hiểu công suất điện P = UI và vai trò trong đời sống. So sánh với nhãn thiết bị.</p>
+                    <span class="exp-badge" style="background:rgba(191,95,255,.08);color:var(--purple);border:1px solid rgba(191,95,255,.2);">P · Watt · Nhãn</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CÁC TRANG THÍ NGHIỆM -->
+        <div id="exp-detail-view" style="display:none;">
+            <!-- TN1 -->
+            <div class="exp-page" id="exp-page-0">
+                <div class="exp-breadcrumb">
+                    <a onclick="backToExpList()">🧪 Thí Nghiệm</a>
+                    <span>›</span>
+                    <span style="color:var(--cyan);">⚡ TN1: Độ mạnh yếu dòng điện</span>
+                </div>
+                <div class="page-header">
+                    <h1>⚡ TN1: Độ Mạnh Yếu Dòng Điện</h1>
+                    <p>Cường độ dòng điện I · Độ sáng bóng đèn · Nam châm điện</p>
+                </div>
+                <div class="step-wizard" id="wizard-0"></div>
+                <div class="step-progress" id="progress-0">
+                    <span id="progress-label-0">Bước 1/5</span>
+                    <div class="step-progress-dots" id="progress-dots-0"></div>
+                </div>
+                <div id="stages-0">
+                    <!-- Stage 1 -->
+                    <div class="stage-content active" id="stage-0-0">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🎯</span>Giai Đoạn 1: Tìm Hiểu Lý Thuyết & Mục Tiêu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Dẫn Dắt</span></div>
+                                <div class="ai-guide-text" id="ai-intro-0">Đang tải hướng dẫn AI...</div>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(0,229,255,.1);border-radius:12px;padding:18px;margin-bottom:16px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--cyan);letter-spacing:2px;margin-bottom:12px;">📚 Lý Thuyết Cốt Lõi</div>
+                                <p style="font-size:.88rem;line-height:1.9;color:rgba(200,230,255,.8);">
+                                    <strong style="color:var(--cyan);">Cường độ dòng điện I</strong> là đại lượng đặc trưng cho độ mạnh/yếu của dòng điện.<br>
+                                    • Công thức: <strong style="color:var(--yellow);">I = Δq/Δt</strong> — điện lượng chuyển qua tiết diện trong 1 giây<br>
+                                    • Công thức vi mô: <strong style="color:var(--yellow);">I = nSve</strong> (n: mật độ e, S: tiết diện, v: vận tốc trôi)<br>
+                                    • Đơn vị: <strong style="color:var(--green);">Ampere (A)</strong><br>
+                                    • I càng lớn → bóng đèn càng sáng, nam châm điện hút càng mạnh
+                                </p>
+                            </div>
+                            <div style="font-size:.85rem;color:rgba(200,230,255,.6);margin-bottom:16px;">
+                                <strong style="color:var(--yellow);">Dụng cụ cần chuẩn bị:</strong> Nguồn điện, bóng đèn, biến trở, ampe kế, dây nối, nam châm điện
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Lý Thuyết</span></div>
+                            <div class="exp-chat-box" id="echat-0"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-0" placeholder="Hỏi AI về cường độ dòng điện..."/>
+                                <button class="exp-chat-send" onclick="sendExpChat(0)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(0,1)">Tiếp theo: Mô phỏng Tinkercad →</button>
+                    </div>
+                    <!-- Stage 2 -->
+                    <div class="stage-content" id="stage-0-1">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">💻</span>Giai Đoạn 2: Mô Phỏng Trên Tinkercad</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Trước khi làm thực tế, hãy mô phỏng mạch điện trên Tinkercad. Lắp mạch có bóng đèn + biến trở + ampe kế. <strong style="color:var(--yellow);">Câu hỏi cho em:</strong> Khi tăng điện trở biến trở, dòng I sẽ thay đổi như thế nào? Độ sáng bóng đèn sẽ ra sao? Hãy dự đoán trước khi chạy mô phỏng nhé!</div>
+                            </div>
+                            <div style="margin-bottom:16px;">
+                                <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank">🔗 Mở Tinkercad Circuits</a>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(0,229,255,.1);border-radius:12px;padding:18px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--orange);letter-spacing:2px;margin-bottom:10px;">📋 Hướng Dẫn Lắp Mạch</div>
+                                <ol style="font-size:.85rem;color:rgba(200,230,255,.8);line-height:2;padding-left:20px;">
+                                    <li>Thêm nguồn điện DC (battery)</li>
+                                    <li>Thêm bóng đèn (light bulb) nối vào mạch chính</li>
+                                    <li>Thêm biến trở (potentiometer) để điều chỉnh I</li>
+                                    <li>Thêm ampe kế (multimeter → A) để đo I</li>
+                                    <li>Chạy mô phỏng và thay đổi biến trở → quan sát độ sáng</li>
+                                </ol>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Mô Phỏng</span></div>
+                            <div class="exp-chat-box" id="echat-0-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-0-1" placeholder="Hỏi AI về cách lắp mạch..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(0,1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(0,2)">Tiếp theo: So sánh mạch mẫu →</button>
+                    </div>
+                    <!-- Stage 3 -->
+                    <div class="stage-content" id="stage-0-2">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔍</span>Giai Đoạn 3: So Sánh Với Mô Hình Mẫu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Đây là mạch mẫu đã được thực hiện đúng. Hãy so sánh với mạch em vừa lắp. <strong style="color:var(--yellow);">Câu hỏi:</strong> Mạch của em có giống không? Nếu sai ở đâu thì sẽ ảnh hưởng gì đến kết quả đo I? Ghi lại những điểm khác biệt em tìm thấy.</div>
+                            </div>
+                            <div style="margin-bottom:16px;">
+                                <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">✅ Xem Mạch Mẫu TN1</a>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(0,255,157,.1);border-radius:12px;padding:18px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--green);letter-spacing:2px;margin-bottom:10px;">🎯 Kiểm Tra Mạch</div>
+                                <p style="font-size:.85rem;color:rgba(200,230,255,.75);line-height:1.8;">
+                                    Đảm bảo ampe kế mắc <strong style="color:var(--cyan);">nối tiếp</strong> trong mạch chính (không mắc song song).<br>
+                                    Biến trở mắc đúng chiều để có thể điều chỉnh từ nhỏ đến lớn.<br>
+                                    Bóng đèn được cấp đúng điện áp định mức.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về So Sánh Mạch</span></div>
+                            <div class="exp-chat-box" id="echat-0-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-0-2" placeholder="Hỏi AI về mạch mẫu..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(0,2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(0,3)">Tiếp theo: Thí nghiệm thực tế →</button>
+                    </div>
+                    <!-- Stage 4 -->
+                    <div class="stage-content" id="stage-0-3">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔬</span>Giai Đoạn 4: Thí Nghiệm Thực Tế ESP32-S3</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Nhắc Nhở</span></div>
+                                <div class="ai-guide-text">Hãy thay đổi biến trở và ghi lại giá trị khi đèn sáng yếu, sáng vừa, sáng mạnh. Cố gắng ghi ít nhất <strong style="color:var(--cyan);">5 điểm</strong> với I khác nhau để thấy rõ quy luật!</div>
+                            </div>
+                            <div class="rt-display" style="grid-template-columns:1fr 1fr;">
+                                <div class="rt-card">
+                                    <div><div class="rt-label">⚡ Cường Độ I</div><div class="rt-value" style="color:var(--cyan);" id="rt0-I">—</div><div style="font-size:.68rem;color:rgba(200,230,255,.35);">Ampere (A)</div></div>
+                                </div>
+                                <div class="rt-card">
+                                    <div><div class="rt-label">🔋 Điện Áp U</div><div class="rt-value" style="color:var(--yellow);" id="rt0-U">—</div><div style="font-size:.68rem;color:rgba(200,230,255,.35);">Volt (V)</div></div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <button class="btn-record" onclick="recordData(0)">📌 Ghi Dữ Liệu</button>
+                                <button class="btn-clear" onclick="clearData(0)">🗑️ Xóa Bảng</button>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead><tr><th>STT</th><th>Thời Gian</th><th>I (A)</th><th>U (V)</th><th>Mô tả</th></tr></thead>
+                                    <tbody id="table-0"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI Trong Lúc Đo</span></div>
+                            <div class="exp-chat-box" id="echat-0-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-0-3" placeholder="Hỏi AI về số liệu đang đo..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(0,3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(0,4)">Tiếp theo: Nhận xét & Tổng kết →</button>
+                    </div>
+                    <!-- Stage 5 -->
+                    <div class="stage-content" id="stage-0-4">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">✅</span>Giai Đoạn 5: Nhận Xét & Tổng Kết</div>
+                            <div class="ai-analysis" id="analysis-0">
+                                <div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div>
+                                <div class="ai-analysis-loading"><div class="typing-dots"><span></span><span></span><span></span></div> AI đang phân tích số liệu của bạn...</div>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Thảo Luận Kết Quả</span></div>
+                            <div class="exp-chat-box" id="echat-0-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-0-4" placeholder="Hỏi thêm về kết quả thí nghiệm..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(0,4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-complete" onclick="completeExperiment(0)">🏆 Hoàn Thành Thí Nghiệm 1</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TN2 -->
+            <div class="exp-page" id="exp-page-1">
+                <div class="exp-breadcrumb">
+                    <a onclick="backToExpList()">🧪 Thí Nghiệm</a>
+                    <span>›</span>
+                    <span style="color:var(--yellow);">📐 TN2: Điện trở & Đường đặc trưng V-A</span>
+                </div>
+                <div class="page-header" style="--cyan:var(--yellow)">
+                    <h1 style="color:var(--yellow);">📐 TN2: Điện Trở & Đường V-A</h1>
+                    <p>Định luật Ohm · R = U/I · Đường đặc trưng Vôn–Ampe</p>
+                </div>
+                <div class="step-wizard" id="wizard-1"></div>
+                <div id="stages-1">
+                    <!-- Stage 1 -->
+                    <div class="stage-content active" id="stage-1-0">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🎯</span>Giai Đoạn 1: Tìm Hiểu Lý Thuyết</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Dẫn Dắt</span></div>
+                                <div class="ai-guide-text" id="ai-intro-1">Đang tải hướng dẫn AI...</div>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(255,230,0,.1);border-radius:12px;padding:18px;margin-bottom:16px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--yellow);letter-spacing:2px;margin-bottom:12px;">📚 Lý Thuyết Cốt Lõi</div>
+                                <p style="font-size:.88rem;line-height:1.9;color:rgba(200,230,255,.8);">
+                                    <strong style="color:var(--yellow);">Điện trở R</strong> đặc trưng cho mức độ cản trở dòng điện của vật dẫn.<br>
+                                    • <strong>Định luật Ohm:</strong> <strong style="color:var(--cyan);">I = U/R</strong> hay <strong style="color:var(--cyan);">R = U/I</strong><br>
+                                    • Đơn vị: <strong style="color:var(--green);">Ohm (Ω)</strong><br>
+                                    • <strong>Đường đặc trưng V-A:</strong> Đồ thị U-I là đường thẳng qua gốc O, độ dốc = R<br>
+                                    • R phụ thuộc: vật liệu (ρ), chiều dài (l), tiết diện (S): R = ρl/S
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Điện Trở</span></div>
+                            <div class="exp-chat-box" id="echat-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-1" placeholder="Hỏi về định luật Ohm, điện trở..."/>
+                                <button class="exp-chat-send" onclick="sendExpChat(1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(1,1)" style="border-color:var(--yellow);color:var(--yellow);">Tiếp theo: Mô phỏng Tinkercad →</button>
+                    </div>
+                    <!-- Stage 2 -->
+                    <div class="stage-content" id="stage-1-1">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">💻</span>Giai Đoạn 2: Mô Phỏng Tinkercad</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Lắp mạch với vật dẫn (điện trở), vôn kế đo U₂ và ampe kế đo I. Thay đổi U nguồn ít nhất 5-6 lần và ghi lại cặp (U, I) mỗi lần. <strong style="color:var(--yellow);">Dự đoán:</strong> Nếu R không đổi, khi U tăng gấp đôi thì I thay đổi ra sao?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank">🔗 Mở Tinkercad</a>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(255,230,0,.1);border-radius:12px;padding:18px;margin-top:14px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--yellow);letter-spacing:2px;margin-bottom:10px;">📋 Hướng Dẫn</div>
+                                <ol style="font-size:.85rem;color:rgba(200,230,255,.8);line-height:2;padding-left:20px;">
+                                    <li>Thêm điện trở (resistor) làm vật dẫn</li>
+                                    <li>Vôn kế mắc <strong style="color:var(--yellow);">song song</strong> với điện trở</li>
+                                    <li>Ampe kế mắc <strong style="color:var(--cyan);">nối tiếp</strong> trong mạch</li>
+                                    <li>Thay đổi điện áp nguồn, ghi 5-6 cặp U-I</li>
+                                    <li>Vẽ đồ thị I theo U → xác nhận đường thẳng</li>
+                                </ol>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Mô Phỏng TN2</span></div>
+                            <div class="exp-chat-box" id="echat-1-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-1-1" placeholder="Hỏi AI về cách mắc vôn kế, ampe kế..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(1,1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(1,2)" style="border-color:var(--yellow);color:var(--yellow);">Tiếp theo: Mạch mẫu →</button>
+                    </div>
+                    <!-- Stage 3 -->
+                    <div class="stage-content" id="stage-1-2">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔍</span>Giai Đoạn 3: So Sánh Mô Hình Mẫu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">So sánh mạch của em với mạch mẫu. <strong style="color:var(--yellow);">Câu hỏi quan trọng:</strong> Vôn kế có mắc đúng song song không? Nếu vôn kế mắc nối tiếp thì số đo sẽ sai như thế nào? Tại sao điện trở của vôn kế phải rất lớn?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">✅ Xem Mạch Mẫu TN2</a>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(255,230,0,.1);border-radius:12px;padding:18px;margin-top:14px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--yellow);letter-spacing:2px;margin-bottom:10px;">🎯 Kiểm Tra Mạch TN2</div>
+                                <p style="font-size:.85rem;color:rgba(200,230,255,.75);line-height:1.8;">
+                                    Đường thẳng V-A đi qua gốc O = xác nhận định luật Ohm.<br>
+                                    Độ dốc đường thẳng = <strong style="color:var(--yellow);">R = ΔU/ΔI</strong><br>
+                                    R tính từ đồ thị phải gần bằng R ghi trên thân điện trở (màu vòng dây).
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về So Sánh Mạch TN2</span></div>
+                            <div class="exp-chat-box" id="echat-1-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-1-2" placeholder="Hỏi AI về đường V-A, cách mắc dụng cụ..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(1,2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(1,3)" style="border-color:var(--yellow);color:var(--yellow);">Tiếp theo: Thí nghiệm thực tế →</button>
+                    </div>
+                    <!-- Stage 4 -->
+                    <div class="stage-content" id="stage-1-3">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔬</span>Giai Đoạn 4: Thí Nghiệm Thực Tế & Vẽ Đồ Thị V-A</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Nhắc Nhở</span></div>
+                                <div class="ai-guide-text">Hãy thay đổi U nhiều lần (<strong style="color:var(--cyan);">ít nhất 5-6 điểm</strong>) để vẽ được đường thẳng V-A rõ ràng. Mỗi lần thay đổi biến trở, chờ ổn định rồi mới ghi!</div>
+                            </div>
+                            <div class="rt-display" style="grid-template-columns:repeat(3,1fr);">
+                                <div class="rt-card">
+                                    <div><div class="rt-label">🔋 U₂ (V)</div><div class="rt-value" style="color:var(--yellow);" id="rt1-U">—</div></div>
+                                </div>
+                                <div class="rt-card">
+                                    <div><div class="rt-label">⚡ I (A)</div><div class="rt-value" style="color:var(--cyan);" id="rt1-I">—</div></div>
+                                </div>
+                                <div class="rt-card">
+                                    <div><div class="rt-label">📐 R = U/I (Ω)</div><div class="rt-value" style="color:var(--orange);" id="rt1-R">—</div></div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <button class="btn-record" onclick="recordData(1)">📌 Ghi Dữ Liệu</button>
+                                <button class="btn-clear" onclick="clearData(1)">🗑️ Xóa Bảng</button>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead><tr><th>STT</th><th>Thời Gian</th><th>I (A)</th><th>U₂ (V)</th><th>R (Ω)</th></tr></thead>
+                                    <tbody id="table-1"></tbody>
+                                </table>
+                            </div>
+                            <!-- V-A Chart -->
+                            <div class="va-chart-wrap">
+                                <div class="vc-title">📈 Đường Đặc Trưng Vôn-Ampe (V-A)</div>
+                                <canvas id="chartVA" style="max-height:200px !important;"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI Trong Lúc Đo Thực Tế</span></div>
+                            <div class="exp-chat-box" id="echat-1-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-1-3" placeholder="Hỏi AI về số liệu U-I đang đo..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(1,3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(1,4)" style="border-color:var(--yellow);color:var(--yellow);">Tiếp theo: Nhận xét & Tổng kết →</button>
+                    </div>
+                    <!-- Stage 5 -->
+                    <div class="stage-content" id="stage-1-4">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">✅</span>Giai Đoạn 5: Nhận Xét & Tổng Kết</div>
+                            <div class="ai-analysis" id="analysis-1">
+                                <div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div>
+                                <div class="ai-analysis-loading"><div class="typing-dots"><span></span><span></span><span></span></div> AI đang phân tích đường V-A và tính R...</div>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Thảo Luận Kết Quả</span></div>
+                            <div class="exp-chat-box" id="echat-1-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-1-4" placeholder="Hỏi về đường V-A, định luật Ohm..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(1,4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-complete" onclick="completeExperiment(1)">🏆 Hoàn Thành Thí Nghiệm 2</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TN3 -->
+            <div class="exp-page" id="exp-page-2">
+                <div class="exp-breadcrumb">
+                    <a onclick="backToExpList()">🧪 Thí Nghiệm</a>
+                    <span>›</span>
+                    <span style="color:var(--orange);">🔋 TN3: Nguồn điện – Điện trở trong</span>
+                </div>
+                <div class="page-header">
+                    <h1 style="color:var(--orange);">🔋 TN3: Nguồn Điện & Điện Trở Trong</h1>
+                    <p>U = E – Ir · Điện trở trong r · Acquy thực tế</p>
+                </div>
+                <div class="step-wizard" id="wizard-2"></div>
+                <div id="stages-2">
+                    <div class="stage-content active" id="stage-2-0">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🎯</span>Giai Đoạn 1: Tìm Hiểu Lý Thuyết</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Dẫn Dắt</span></div>
+                                <div class="ai-guide-text" id="ai-intro-2">Đang tải hướng dẫn AI...</div>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(255,140,0,.1);border-radius:12px;padding:18px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--orange);letter-spacing:2px;margin-bottom:12px;">📚 Lý Thuyết Cốt Lõi</div>
+                                <p style="font-size:.88rem;line-height:1.9;color:rgba(200,230,255,.8);">
+                                    <strong style="color:var(--orange);">Nguồn điện thực tế</strong> luôn có điện trở trong r.<br>
+                                    • Suất điện động: <strong style="color:var(--cyan);">E</strong> (đặc trưng cho khả năng sinh công)<br>
+                                    • Điện trở trong: <strong style="color:var(--orange);">r</strong> (điện trở của bản thân nguồn)<br>
+                                    • Công thức: <strong style="color:var(--yellow);">U = E – Ir</strong> (U là hiệu điện thế mạch ngoài)<br>
+                                    • Acquy bị "chai": r tăng lớn → U giảm mạnh dù E không đổi
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Nguồn Điện</span></div>
+                            <div class="exp-chat-box" id="echat-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-2" placeholder="Hỏi về điện trở trong, suất điện động..."/>
+                                <button class="exp-chat-send" onclick="sendExpChat(2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(2,1)" style="border-color:var(--orange);color:var(--orange);">Tiếp theo: Mô phỏng →</button>
+                    </div>
+                    <div class="stage-content" id="stage-2-1">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">💻</span>Giai Đoạn 2: Mô Phỏng Tinkercad</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Lắp mạch nguồn acquy + biến trở + vôn kế đo U₂. <strong style="color:var(--yellow);">Câu hỏi dự đoán:</strong> Khi điện trở mạch ngoài R nhỏ, dòng I lớn — U₂ sẽ tăng hay giảm? Điều này liên quan gì đến r?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--orange);color:var(--orange);">🔗 Mở Tinkercad</a>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Mô Phỏng Tinkercad</span></div>
+                            <div class="exp-chat-box" id="echat-2-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-2-1" placeholder="Hỏi AI về cách lắp mạch nguồn..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(2,1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(2,2)" style="border-color:var(--orange);color:var(--orange);">Tiếp theo: Mạch mẫu →</button>
+                    </div>
+                    <div class="stage-content" id="stage-2-2">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔍</span>Giai Đoạn 3: So Sánh Mô Hình Mẫu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">So sánh mạch acquy của em với mạch mẫu. <strong style="color:var(--yellow);">Câu hỏi:</strong> Tại sao vôn kế phải đo ở đầu cực acquy (mạch ngoài), không phải bên trong? Nếu mắc ampe kế song song thay vì nối tiếp thì điều gì xảy ra với mạch?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">✅ Xem Mạch Mẫu TN3</a>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(255,140,0,.1);border-radius:12px;padding:18px;margin-top:14px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--orange);letter-spacing:2px;margin-bottom:10px;">🎯 Điểm Cần Kiểm Tra</div>
+                                <p style="font-size:.85rem;color:rgba(200,230,255,.75);line-height:1.8;">
+                                    Vôn kế đo <strong style="color:var(--cyan);">U₂ = điện áp hai cực acquy</strong> (mạch ngoài).<br>
+                                    Khi I lớn → sụt áp trong Ir lớn → U₂ giảm: đây là bằng chứng của r!<br>
+                                    Thay đổi R ngoài để thấy U₂ thay đổi theo I.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về So Sánh Mạch TN3</span></div>
+                            <div class="exp-chat-box" id="echat-2-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-2-2" placeholder="Hỏi AI về mạch acquy, điện trở trong..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(2,2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(2,3)" style="border-color:var(--orange);color:var(--orange);">Tiếp theo: Thí nghiệm thực tế →</button>
+                    </div>
+                    <div class="stage-content" id="stage-2-3">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔬</span>Giai Đoạn 4: Thí Nghiệm – Đo Điện Trở Trong r</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Nhắc Nhở</span></div>
+                                <div class="ai-guide-text">Nhập giá trị E và R ngoài trước khi ghi. Hệ thống sẽ tự tính r = (E – U₂)/I. Ghi nhiều điểm với R ngoài khác nhau để tính r trung bình chính xác hơn!</div>
+                            </div>
+                            <div class="input-row" style="margin-bottom:12px;">
+                                <div>
+                                    <div class="input-label">⚡ Suất điện động E (V)</div>
+                                    <input type="number" class="exp-input" id="input-E" placeholder="VD: 12.0" step="0.1">
+                                </div>
+                                <div>
+                                    <div class="input-label">📐 Điện trở ngoài R (Ω)</div>
+                                    <input type="number" class="exp-input" id="input-R" placeholder="VD: 10.0" step="0.1">
+                                </div>
+                            </div>
+                            <div class="rt-display" style="grid-template-columns:repeat(3,1fr);">
+                                <div class="rt-card"><div><div class="rt-label">⚡ I (A)</div><div class="rt-value" style="color:var(--cyan);" id="rt2-I">—</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">🔋 U₂ (V)</div><div class="rt-value" style="color:var(--yellow);" id="rt2-U">—</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">🔩 r = (E-U₂)/I</div><div class="rt-value" style="color:var(--orange);" id="rt2-r">—</div></div></div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <button class="btn-record" onclick="recordData(2)" style="border-color:var(--orange);color:var(--orange);">📌 Ghi Dữ Liệu</button>
+                                <button class="btn-clear" onclick="clearData(2)">🗑️ Xóa Bảng</button>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead><tr><th>STT</th><th>Thời Gian</th><th>I (A)</th><th>E (V)</th><th>R ngoài (Ω)</th><th>r (Ω)</th></tr></thead>
+                                    <tbody id="table-2"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI Trong Lúc Đo Thực Tế</span></div>
+                            <div class="exp-chat-box" id="echat-2-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-2-3" placeholder="Hỏi AI về r, công thức U=E-Ir..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(2,3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(2,4)" style="border-color:var(--orange);color:var(--orange);">Tiếp theo: Nhận xét & Tổng kết →</button>
+                    </div>
+                    <div class="stage-content" id="stage-2-4">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">✅</span>Giai Đoạn 5: Nhận Xét & Tổng Kết</div>
+                            <div class="ai-analysis" id="analysis-2">
+                                <div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div>
+                                <div class="ai-analysis-loading"><div class="typing-dots"><span></span><span></span><span></span></div> AI đang tính r trung bình và phân tích...</div>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Thảo Luận</span></div>
+                            <div class="exp-chat-box" id="echat-2-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-2-4" placeholder="Hỏi về điện trở trong, acquy chai..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(2,4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-complete" onclick="completeExperiment(2)" style="border-color:var(--orange);color:var(--orange);">🏆 Hoàn Thành Thí Nghiệm 3</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TN4 -->
+            <div class="exp-page" id="exp-page-3">
+                <div class="exp-breadcrumb">
+                    <a onclick="backToExpList()">🧪 Thí Nghiệm</a>
+                    <span>›</span>
+                    <span style="color:var(--green);">⏱️ TN4: Khảo sát tiêu thụ điện</span>
+                </div>
+                <div class="page-header">
+                    <h1 style="color:var(--green);">⏱️ TN4: Khảo Sát Tiêu Thụ Điện 10 Giây</h1>
+                    <p>Điện lượng A · Nhiệt lượng Q = UIt · Joule</p>
+                </div>
+                <div class="step-wizard" id="wizard-3"></div>
+                <div id="stages-3">
+                    <div class="stage-content active" id="stage-3-0">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🎯</span>Giai Đoạn 1: Tìm Hiểu Lý Thuyết</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Dẫn Dắt</span></div>
+                                <div class="ai-guide-text" id="ai-intro-3">Đang tải hướng dẫn AI...</div>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(0,255,157,.1);border-radius:12px;padding:18px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--green);letter-spacing:2px;margin-bottom:12px;">📚 Lý Thuyết Cốt Lõi</div>
+                                <p style="font-size:.88rem;line-height:1.9;color:rgba(200,230,255,.8);">
+                                    <strong style="color:var(--green);">Điện lượng A</strong> là điện tích dịch chuyển qua thiết bị.<br>
+                                    • <strong style="color:var(--cyan);">A = I × t</strong> (Coulomb – C)<br>
+                                    <strong style="color:var(--teal);">Nhiệt lượng Joule Q</strong> tỏa ra khi có dòng điện chạy qua:<br>
+                                    • <strong style="color:var(--cyan);">Q = U × I × t = I²Rt</strong> (Joule – J)<br>
+                                    • Trong 10 giây: Q = U × I × 10<br>
+                                    • Ứng dụng: bàn ủi, bếp điện, dây tóc bóng đèn đều dùng nhiệt Joule
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Nhiệt Joule</span></div>
+                            <div class="exp-chat-box" id="echat-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-3" placeholder="Hỏi về nhiệt lượng Joule, điện lượng..."/>
+                                <button class="exp-chat-send" onclick="sendExpChat(3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(3,1)" style="border-color:var(--green);color:var(--green);">Tiếp theo: Mô phỏng →</button>
+                    </div>
+                    <div class="stage-content" id="stage-3-1">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">💻</span>Giai Đoạn 2: Mô Phỏng Tinkercad</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Lắp mạch thiết bị tiêu thụ điện (bóng đèn, điện trở...) với vôn kế và ampe kế. Ghi lại U và I ổn định để tính A và Q trong 10 giây. <strong style="color:var(--yellow);">Câu hỏi:</strong> Thiết bị nào tỏa nhiệt nhiều hơn — bóng đèn hay điện trở nhỏ hơn? Tại sao?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">🔗 Mở Tinkercad</a>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Mô Phỏng Tinkercad TN4</span></div>
+                            <div class="exp-chat-box" id="echat-3-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-3-1" placeholder="Hỏi AI về nhiệt Joule, thiết bị tiêu thụ điện..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(3,1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(3,2)" style="border-color:var(--green);color:var(--green);">Tiếp theo: Mạch mẫu →</button>
+                    </div>
+                    <div class="stage-content" id="stage-3-2">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔍</span>Giai Đoạn 3: So Sánh Mô Hình Mẫu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">So sánh mạch đo nhiệt Joule của em với mạch mẫu. <strong style="color:var(--yellow);">Câu hỏi:</strong> Công thức A = I×10 tính điện lượng — ý nghĩa thực tế là gì? Tại sao dây tóc bóng đèn phát sáng còn dây đồng thì không dù có cùng dòng điện?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">✅ Xem Mạch Mẫu TN4</a>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(0,255,157,.1);border-radius:12px;padding:18px;margin-top:14px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--green);letter-spacing:2px;margin-bottom:10px;">🎯 Kiểm Tra Mạch TN4</div>
+                                <p style="font-size:.85rem;color:rgba(200,230,255,.75);line-height:1.8;">
+                                    Đảm bảo vôn kế đo đúng U₂ qua thiết bị và ampe kế đo I mạch chính.<br>
+                                    Công thức: <strong style="color:var(--cyan);">Q = U × I × 10</strong> (Joule, trong 10 giây).<br>
+                                    Thử nhiều thiết bị khác nhau để so sánh nhiệt lượng tỏa ra!
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về So Sánh Mạch TN4</span></div>
+                            <div class="exp-chat-box" id="echat-3-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-3-2" placeholder="Hỏi AI về điện lượng, nhiệt Joule trong đời sống..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(3,2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(3,3)" style="border-color:var(--green);color:var(--green);">Tiếp theo: Thí nghiệm →</button>
+                    </div>
+                    <div class="stage-content" id="stage-3-3">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔬</span>Giai Đoạn 4: Thí Nghiệm – Đo Trong 10 Giây</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Nhắc Nhở</span></div>
+                                <div class="ai-guide-text">Đảm bảo dòng và áp ổn định trước khi ghi. A = U×I×10 (trong 10 giây). Thử nhiều thiết bị khác nhau để so sánh nhiệt lượng tỏa ra!</div>
+                            </div>
+                            <div class="rt-display" style="grid-template-columns:repeat(4,1fr);">
+                                <div class="rt-card"><div><div class="rt-label">🔋 U₂</div><div class="rt-value" style="color:var(--yellow);" id="rt3-U">—</div><div style="font-size:.65rem;color:rgba(200,230,255,.3);">V</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">⚡ I</div><div class="rt-value" style="color:var(--cyan);" id="rt3-I">—</div><div style="font-size:.65rem;color:rgba(200,230,255,.3);">A</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">🔌 A = U×I×10</div><div class="rt-value" style="color:var(--green);" id="rt3-A">—</div><div style="font-size:.65rem;color:rgba(200,230,255,.3);">C</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">🌡️ Q (J)</div><div class="rt-value" style="color:var(--teal);" id="rt3-Q">—</div><div style="font-size:.65rem;color:rgba(200,230,255,.3);">J</div></div></div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <button class="btn-record" onclick="recordData(3)" style="border-color:var(--green);color:var(--green);">📌 Ghi Dữ Liệu</button>
+                                <button class="btn-clear" onclick="clearData(3)">🗑️ Xóa Bảng</button>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead><tr><th>STT</th><th>Thời Gian</th><th>U₂ (V)</th><th>I (A)</th><th>A (C)</th><th>Q (J)</th></tr></thead>
+                                    <tbody id="table-3"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI Trong Lúc Đo Thực Tế</span></div>
+                            <div class="exp-chat-box" id="echat-3-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-3-3" placeholder="Hỏi AI về điện lượng và nhiệt Joule..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(3,3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(3,4)" style="border-color:var(--green);color:var(--green);">Tiếp theo: Nhận xét & Tổng kết →</button>
+                    </div>
+                    <div class="stage-content" id="stage-3-4">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">✅</span>Giai Đoạn 5: Nhận Xét & Tổng Kết</div>
+                            <div class="ai-analysis" id="analysis-3">
+                                <div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div>
+                                <div class="ai-analysis-loading"><div class="typing-dots"><span></span><span></span><span></span></div> AI đang so sánh nhiệt lượng các thiết bị...</div>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Thảo Luận</span></div>
+                            <div class="exp-chat-box" id="echat-3-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-3-4" placeholder="Hỏi về nhiệt Joule trong đời sống..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(3,4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-complete" onclick="completeExperiment(3)" style="border-color:var(--green);color:var(--green);">🏆 Hoàn Thành Thí Nghiệm 4</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TN5 -->
+            <div class="exp-page" id="exp-page-4">
+                <div class="exp-breadcrumb">
+                    <a onclick="backToExpList()">🧪 Thí Nghiệm</a>
+                    <span>›</span>
+                    <span style="color:var(--purple);">💡 TN5: Công suất điện</span>
+                </div>
+                <div class="page-header">
+                    <h1 style="color:var(--purple);">💡 TN5: Công Suất Điện Thiết Bị</h1>
+                    <p>P = UI · Watt · So sánh với nhãn thiết bị</p>
+                </div>
+                <div class="step-wizard" id="wizard-4"></div>
+                <div id="stages-4">
+                    <div class="stage-content active" id="stage-4-0">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🎯</span>Giai Đoạn 1: Tìm Hiểu Lý Thuyết</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Dẫn Dắt</span></div>
+                                <div class="ai-guide-text" id="ai-intro-4">Đang tải hướng dẫn AI...</div>
+                            </div>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(191,95,255,.1);border-radius:12px;padding:18px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--purple);letter-spacing:2px;margin-bottom:12px;">📚 Lý Thuyết Cốt Lõi</div>
+                                <p style="font-size:.88rem;line-height:1.9;color:rgba(200,230,255,.8);">
+                                    <strong style="color:var(--purple);">Công suất điện P</strong> là năng lượng tiêu thụ trong 1 giây.<br>
+                                    • <strong style="color:var(--cyan);">P = U × I</strong> (Watt – W)<br>
+                                    • Hay: <strong style="color:var(--cyan);">P = U²/R = I²R</strong><br>
+                                    • Bóng đèn 100W > 40W: mỗi giây tiêu thụ nhiều điện năng hơn<br>
+                                    • Nhãn thiết bị ghi P định mức tại U định mức (220V)<br>
+                                    • 1 kWh = 1000W × 3600s = 3.6 × 10⁶ J
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Công Suất</span></div>
+                            <div class="exp-chat-box" id="echat-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-4" placeholder="Hỏi về công suất điện, kWh, nhãn thiết bị..."/>
+                                <button class="exp-chat-send" onclick="sendExpChat(4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(4,1)" style="border-color:var(--purple);color:var(--purple);">Tiếp theo: Mô phỏng →</button>
+                    </div>
+                    <div class="stage-content" id="stage-4-1">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">💻</span>Giai Đoạn 2: Mô Phỏng Tinkercad</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">Lắp mạch thiết bị tiêu thụ điện với vôn kế và ampe kế. Thử các thiết bị có công suất định mức khác nhau. <strong style="color:var(--yellow);">Dự đoán:</strong> Thiết bị nào cho I cao hơn khi cùng U? Thiết bị có R nhỏ hay R lớn tiêu thụ điện nhiều hơn?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--purple);color:var(--purple);">🔗 Mở Tinkercad</a>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về Mô Phỏng Tinkercad TN5</span></div>
+                            <div class="exp-chat-box" id="echat-4-1"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-4-1" placeholder="Hỏi AI về công suất, so sánh thiết bị..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(4,1)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(4,2)" style="border-color:var(--purple);color:var(--purple);">Tiếp theo: Mạch mẫu →</button>
+                    </div>
+                    <div class="stage-content" id="stage-4-2">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔍</span>Giai Đoạn 3: So Sánh Mô Hình Mẫu</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Hướng Dẫn</span></div>
+                                <div class="ai-guide-text">So sánh mạch đo công suất của em với mạch mẫu. <strong style="color:var(--yellow);">Câu hỏi:</strong> Nhãn thiết bị ghi "220V – 100W" có nghĩa là gì? Nếu cắm vào nguồn 110V thì công suất thực tế sẽ là bao nhiêu Watt?</div>
+                            </div>
+                            <a class="btn-tinkercad" href="https://www.tinkercad.com/circuits" target="_blank" style="border-color:var(--green);color:var(--green);">✅ Xem Mạch Mẫu TN5</a>
+                            <div style="background:rgba(0,10,30,.6);border:1px solid rgba(191,95,255,.1);border-radius:12px;padding:18px;margin-top:14px;">
+                                <div style="font-family:'Orbitron',monospace;font-size:.72rem;color:var(--purple);letter-spacing:2px;margin-bottom:10px;">🎯 Kiểm Tra Mạch TN5</div>
+                                <p style="font-size:.85rem;color:rgba(200,230,255,.75);line-height:1.8;">
+                                    Vôn kế đo <strong style="color:var(--yellow);">U₂</strong> song song với thiết bị; ampe kế đo <strong style="color:var(--cyan);">I</strong> nối tiếp mạch chính.<br>
+                                    Công suất thực tế: <strong style="color:var(--purple);">P = U₂ × I</strong><br>
+                                    So sánh P đo được với P ghi trên nhãn thiết bị — chênh lệch cho thấy hiệu suất.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI về So Sánh Mạch TN5</span></div>
+                            <div class="exp-chat-box" id="echat-4-2"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-4-2" placeholder="Hỏi AI về nhãn thiết bị, công suất định mức..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(4,2)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(4,3)" style="border-color:var(--purple);color:var(--purple);">Tiếp theo: Thí nghiệm →</button>
+                    </div>
+                    <div class="stage-content" id="stage-4-3">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">🔬</span>Giai Đoạn 4: Thí Nghiệm – Đo Công Suất Thực Tế</div>
+                            <div class="ai-guide">
+                                <div class="ai-guide-header"><span class="ai-icon">🤖</span><span>AI Nhắc Nhở</span></div>
+                                <div class="ai-guide-text">Ghi nhiều điểm với các thiết bị khác nhau. Sau đó so sánh P đo được với P ghi trên nhãn. Sự chênh lệch (nếu có) cho thấy điều gì về hiệu suất thiết bị?</div>
+                            </div>
+                            <div class="rt-display" style="grid-template-columns:repeat(3,1fr);">
+                                <div class="rt-card"><div><div class="rt-label">🔋 U₂ (V)</div><div class="rt-value" style="color:var(--yellow);" id="rt4-U">—</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">⚡ I (A)</div><div class="rt-value" style="color:var(--cyan);" id="rt4-I">—</div></div></div>
+                                <div class="rt-card"><div><div class="rt-label">💡 P = U×I (W)</div><div class="rt-value" style="color:var(--purple);" id="rt4-P">—</div></div></div>
+                            </div>
+                            <div style="margin-bottom:14px;">
+                                <button class="btn-record" onclick="recordData(4)" style="border-color:var(--purple);color:var(--purple);">📌 Ghi Dữ Liệu</button>
+                                <button class="btn-clear" onclick="clearData(4)">🗑️ Xóa Bảng</button>
+                            </div>
+                            <div class="data-table-wrap">
+                                <table class="data-table">
+                                    <thead><tr><th>STT</th><th>Thời Gian</th><th>U₂ (V)</th><th>I (A)</th><th>P (W)</th></tr></thead>
+                                    <tbody id="table-4"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Hỏi AI Trong Lúc Đo Thực Tế</span></div>
+                            <div class="exp-chat-box" id="echat-4-3"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-4-3" placeholder="Hỏi AI về công suất thiết bị đang đo..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(4,3)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-next" onclick="nextStage(4,4)" style="border-color:var(--purple);color:var(--purple);">Tiếp theo: Nhận xét & Tổng kết →</button>
+                    </div>
+                    <div class="stage-content" id="stage-4-4">
+                        <div class="stage-box">
+                            <div class="stage-title"><span class="stage-icon">✅</span>Giai Đoạn 5: Nhận Xét & Tổng Kết</div>
+                            <div class="ai-analysis" id="analysis-4">
+                                <div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div>
+                                <div class="ai-analysis-loading"><div class="typing-dots"><span></span><span></span><span></span></div> AI đang so sánh công suất đo được với nhãn thiết bị...</div>
+                            </div>
+                        </div>
+                        <div class="exp-chat-wrap">
+                            <div class="exp-chat-header"><span class="ai-icon">🤖</span><span>Thảo Luận</span></div>
+                            <div class="exp-chat-box" id="echat-4-4"></div>
+                            <div class="exp-chat-input">
+                                <input type="text" id="einput-4-4" placeholder="Hỏi về công suất, tiết kiệm điện..."/>
+                                <button class="exp-chat-send" onclick="sendExpChatStage(4,4)">➤</button>
+                            </div>
+                        </div>
+                        <button class="btn-complete" onclick="completeExperiment(4)" style="border-color:var(--purple);color:var(--purple);">🏆 Hoàn Thành Thí Nghiệm 5</button>
+                    </div>
+                </div>
+            </div>
+        </div><!-- end exp-detail-view -->
+    </div>
+
+</main>
+
+<!-- ===== MODAL BÁO CÁO HỌC SINH ===== -->
+<div id="reportModal">
+    <div class="report-modal-box">
+        <div class="report-modal-header">
+            <div>
+                <h2>📋 BÁO CÁO KẾT QUẢ HỌC TẬP</h2>
+                <p id="reportModalSubtitle">Thí nghiệm · Đánh giá cá nhân · AI tổng hợp</p>
+            </div>
+            <button class="report-close-btn" onclick="closeReportModal()">✕ Đóng</button>
+        </div>
+        <div class="report-modal-body">
+
+            <!-- Thông tin học sinh -->
+            <div class="report-section">
+                <div class="report-section-title" style="color:var(--cyan);">
+                    👤 Thông Tin Học Sinh
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <div>
+                        <div class="report-label">Họ và tên</div>
+                        <textarea class="report-input report-input-sm" id="rp-name" placeholder="Nhập họ tên..."></textarea>
+                    </div>
+                    <div>
+                        <div class="report-label">Lớp / Nhóm</div>
+                        <textarea class="report-input report-input-sm" id="rp-class" placeholder="VD: 11A1 - Nhóm 3..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kiến thức đã học -->
+            <div class="report-section">
+                <div class="report-section-title" style="color:var(--yellow);">
+                    📚 Kiến Thức Tiếp Thu Hôm Nay
+                </div>
+                <div class="report-label">Chọn những kiến thức em đã nắm được:</div>
+                <div class="knowledge-checks" id="rp-knowledge-checks"></div>
+                <div style="margin-top:14px;">
+                    <div class="report-label">Mô tả thêm những điều em học được hôm nay</div>
+                    <textarea class="report-input" id="rp-learned" placeholder="VD: Hôm nay em hiểu được rằng cường độ dòng điện I tỉ lệ với số electron dịch chuyển trong 1 giây..."></textarea>
+                </div>
+            </div>
+
+            <!-- Điểm khó / chưa hiểu -->
+            <div class="report-section">
+                <div class="report-section-title" style="color:var(--pink);">
+                    ❓ Điểm Còn Khó Hiểu
+                </div>
+                <div class="report-label">Em gặp khó khăn ở phần nào? (chọn nhiều)</div>
+                <div class="difficulty-row" id="rp-difficulty-tags"></div>
+                <div style="margin-top:12px;">
+                    <div class="report-label">Mô tả chi tiết điểm em còn thắc mắc</div>
+                    <textarea class="report-input" id="rp-difficulties" placeholder="VD: Em chưa hiểu tại sao điện trở R lại thay đổi khi nhiệt độ thay đổi..."></textarea>
+                </div>
+            </div>
+
+            <!-- Bài học rút ra & Kinh nghiệm -->
+            <div class="report-section">
+                <div class="report-section-title" style="color:var(--green);">
+                    💡 Bài Học Rút Ra & Kinh Nghiệm Thực Hành
+                </div>
+                <div style="display:grid;gap:14px;">
+                    <div>
+                        <div class="report-label">Bài học quan trọng nhất em rút ra</div>
+                        <textarea class="report-input" id="rp-lessons" placeholder="VD: Khi làm thí nghiệm, phải đọc kỹ số liệu nhiều lần và ghi chính xác đến 4 chữ số thập phân..."></textarea>
+                    </div>
+                    <div>
+                        <div class="report-label">Kinh nghiệm thực hành thu được (lắp mạch, đọc số, an toàn...)</div>
+                        <textarea class="report-input" id="rp-experience" placeholder="VD: Ampe kế phải mắc nối tiếp, vôn kế mắc song song – nếu nhầm có thể làm hỏng thiết bị..."></textarea>
+                    </div>
+                    <div>
+                        <div class="report-label">Liên hệ thực tế – Em sẽ ứng dụng kiến thức này ở đâu?</div>
+                        <textarea class="report-input" id="rp-application" placeholder="VD: Hiểu được tại sao đèn sáng yếu khi cắm quá nhiều thiết bị cùng lúc..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thái độ & Mức độ tham gia -->
+            <div class="report-section">
+                <div class="report-section-title" style="color:var(--orange);">
+                    ⭐ Tự Đánh Giá Thái Độ & Mức Độ Tham Gia
+                </div>
+                <div style="margin-bottom:16px;">
+                    <div class="report-label">Thái độ tham gia thí nghiệm</div>
+                    <div class="attitude-grid">
+                        <div class="attitude-btn" data-val="Rất tích cực" onclick="selectAttitude(this,'sel-green')">🌟 Rất tích cực</div>
+                        <div class="attitude-btn" data-val="Tích cực" onclick="selectAttitude(this,'sel-yellow')">😊 Tích cực</div>
+                        <div class="attitude-btn" data-val="Bình thường" onclick="selectAttitude(this,'sel-orange')">😐 Bình thường</div>
+                        <div class="attitude-btn" data-val="Cần cải thiện" onclick="selectAttitude(this,'sel-red')">😔 Cần cải thiện</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <div class="report-label">Tự chấm điểm buổi học (1–5 sao)</div>
+                    <div class="stars-row" id="rp-stars">
+                        <span class="star-btn" data-v="1" onclick="setStar(1)">⭐</span>
+                        <span class="star-btn" data-v="2" onclick="setStar(2)">⭐</span>
+                        <span class="star-btn" data-v="3" onclick="setStar(3)">⭐</span>
+                        <span class="star-btn" data-v="4" onclick="setStar(4)">⭐</span>
+                        <span class="star-btn" data-v="5" onclick="setStar(5)">⭐</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="report-label">Góp ý / Đề xuất cho buổi học sau</div>
+                    <textarea class="report-input" id="rp-suggestion" placeholder="VD: Mong thầy/cô cho thêm thời gian thực hành, hoặc thêm ví dụ thực tế..."></textarea>
+                </div>
+            </div>
+
+            <!-- AI Tổng Hợp -->
+            <div class="report-section" style="border-color:rgba(0,229,255,.2);">
+                <div class="report-section-title" style="color:var(--cyan);">
+                    🤖 AI Tổng Hợp Báo Cáo
+                </div>
+                <button class="report-gen-btn" id="rp-gen-btn" onclick="generateAIReport()">
+                    ✨ TẠO BÁO CÁO AI CHI TIẾT
+                </button>
+                <div class="report-ai-box" id="rp-ai-output" style="display:none;"></div>
+            </div>
+
+            <!-- Xuất file -->
+            <button class="report-export-btn" id="rp-export-btn" onclick="exportStudentReport()" disabled>
+                📄 TẢI XUỐNG BÁO CÁO PDF
+            </button>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// =================== EARLY NAVIGATION BOOTSTRAP ===================
+// Defined first so button works even if later JS has errors
+window.goToExperiments = function() {
+    console.log("🚀 goToExperiments called");
+    try {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        
+        const expPage = document.getElementById('page-experiments');
+        if (expPage) expPage.classList.add('active');
+        
+        const navEl = document.getElementById('nav-experiments');
+        if (navEl) navEl.classList.add('active');
+        
+        const subNav = document.getElementById('exp-sub-nav');
+        if (subNav) subNav.style.display = 'block';
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        console.log("✅ Chuyển sang trang Thí nghiệm thành công!");
+    } catch(e) {
+        console.error("Lỗi goToExperiments:", e);
+        alert("Có lỗi khi chuyển trang. Vui lòng nhấn F5 refresh lại!");
+    }
+};
+
+// =================== NAVIGATION ===================
+window.switchPage = function(pageName, el) {
+    // Remove all active
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    const page = document.getElementById('page-' + pageName);
+    if (page) page.classList.add('active');
+    if (el) el.classList.add('active');
+
+    const subNav = document.getElementById('exp-sub-nav');
+    if (subNav) {
+        subNav.style.display = (pageName === 'experiments') ? 'block' : 'none';
+    }
+
+    // Lazy-init charts when navigating to charts page
+    if (pageName === 'charts') {
+        setTimeout(initMainCharts, 50);
+    }
+};
+
+window.openExperiment = function(idx) {
+    currentExp = idx;
+
+    // Chuyển sang trang Experiments
+    switchPage('experiments', document.getElementById('nav-experiments'));
+
+    // Ẩn list, hiện detail
+    document.getElementById('exp-list-view').style.display = 'none';
+    document.getElementById('exp-detail-view').style.display = 'block';
+
+    // Active thí nghiệm
+    document.querySelectorAll('.exp-page').forEach(p => p.classList.remove('active'));
+    const expPage = document.getElementById('exp-page-' + idx);
+    if (expPage) expPage.classList.add('active');
+
+    // Active sub nav
+    document.querySelectorAll('.nav-exp-sub').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+    });
+
+    // Load AI intro + stage
+    if (typeof loadAIIntro === 'function') loadAIIntro(idx);
+    if (typeof goToStage === 'function') goToStage(idx, currentStages[idx] || 0);
+};
+
+window.goToExperiments = function() {
+    switchPage('experiments', document.getElementById('nav-experiments'));
+};
+
+
+// =================== CHARTS ===================
+function makeChart(id, label, color, fill=true) {
+    const ctx = document.getElementById(id).getContext('2d');
+    return new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: fill ? color + '18' : 'transparent', borderWidth: 2, pointRadius: 2, pointBackgroundColor: color, tension: 0.4, fill }] },
+        options: { responsive: true, animation: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: 'rgba(200,230,255,0.4)', font: { size: 10 }, maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.04)' } }, y: { ticks: { color: 'rgba(200,230,255,0.4)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.06)' } } } }
+    });
+}
+
+// Charts are lazy-initialized when charts page is first opened
+let chartI=null, chartU1=null, chartU2=null, chartR1=null, chartR2=null, chartQ1=null, chartQ2=null;
+let chartsInitialized = false;
+
+function initMainCharts() {
+    if (chartsInitialized) return;
+    try {
+        chartI  = makeChart('chartI',  'I (A)',  '#00e5ff');
+        chartU1 = makeChart('chartU1', 'U₁ (V)', '#ffe600');
+        chartU2 = makeChart('chartU2', 'U₂ (V)', '#bf5fff');
+        chartR1 = makeChart('chartR1', 'R₁ (Ω)', '#ff8c00');
+        chartR2 = makeChart('chartR2', 'R₂ (Ω)', '#ff4f4f');
+        chartQ1 = makeChart('chartQ1', 'Q₁ (J)', '#00ff9d');
+        chartQ2 = makeChart('chartQ2', 'Q₂ (J)', '#00ffc8');
+        chartsInitialized = true;
+    } catch(e) { console.warn('Chart init error:', e); }
+}
+
+// V-A Chart for TN2
+let chartVA = null;
+function initVAChart() {
+    if (chartVA) return;
+    const ctx = document.getElementById('chartVA').getContext('2d');
+    chartVA = new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets: [{ label: 'Đường V-A', data: [], borderColor: '#ffe600', backgroundColor: 'rgba(255,230,0,0.15)', borderWidth: 2, pointRadius: 5, pointBackgroundColor: '#ffe600', showLine: true, tension: 0 }] },
+        options: { responsive: true, animation: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'I (A)', color: '#00e5ff' }, ticks: { color: 'rgba(200,230,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.06)' } }, y: { title: { display: true, text: 'U₂ (V)', color: '#ffe600' }, ticks: { color: 'rgba(200,230,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.06)' } } } }
+    });
+}
+
+function setChart(chart, labels, values) {
+    if (!chart) return;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.update('none');
+}
+
+// =================== SENSOR DATA FETCH ===================
+let lastI=0, lastU1=0, lastU2=0, lastR1=0, lastR2=0, lastQ1=0, lastQ2=0;
+
+async function fetchData() {
+    try {
+        const res = await fetch('/api/latest');
+        const d = await res.json();
+        lastI=d.I; lastU1=d.U1; lastU2=d.U2;
+        lastR1=d.R1; lastR2=d.R2; lastQ1=d.Q1; lastQ2=d.Q2;
+        const P1=lastI*lastU1, P2=lastI*lastU2;
+
+        document.getElementById('valI').textContent  = lastI.toFixed(4);
+        document.getElementById('valU1').textContent = lastU1.toFixed(4);
+        document.getElementById('valU2').textContent = lastU2.toFixed(4);
+        document.getElementById('calcP1').textContent = P1.toFixed(4);
+        document.getElementById('calcR1').textContent = lastR1.toFixed(4);
+        document.getElementById('calcQ1').textContent = lastQ1.toFixed(3);
+        document.getElementById('calcP2').textContent = P2.toFixed(4);
+        document.getElementById('calcR2').textContent = lastR2.toFixed(4);
+        document.getElementById('calcQ2').textContent = lastQ2.toFixed(3);
+        document.getElementById('calcCount').textContent = d.count || 0;
+        document.getElementById('calcV').textContent = d.V ? (d.V / 1e-5).toFixed(4) : '—';
+
+        const dot = document.getElementById('statusDot');
+        if (d.timestamp) {
+            dot.classList.remove('offline');
+            document.getElementById('statusText').textContent = 'ESP32-S3 đang gửi dữ liệu · Kết nối tốt';
+            document.getElementById('statusTime').textContent  = d.timestamp;
+        } else {
+            dot.classList.add('offline');
+            document.getElementById('statusText').textContent = 'Chưa nhận được dữ liệu từ ESP32-S3';
+        }
+
+        document.getElementById('ctxI').textContent  = lastI.toFixed(4);
+        document.getElementById('ctxU1').textContent = lastU1.toFixed(4);
+        document.getElementById('ctxU2').textContent = lastU2.toFixed(4);
+        document.getElementById('ctxR1').textContent = lastR1.toFixed(4);
+        document.getElementById('ctxR2').textContent = lastR2.toFixed(4);
+        document.getElementById('ctxQ1').textContent = lastQ1.toFixed(3);
+        document.getElementById('ctxQ2').textContent = lastQ2.toFixed(3);
+
+        const ts = d.timestamps;
+        if (chartsInitialized) {
+            setChart(chartI, ts, d.histI); setChart(chartU1, ts, d.histU1); setChart(chartU2, ts, d.histU2);
+            setChart(chartR1, ts, d.histR1); setChart(chartR2, ts, d.histR2);
+            setChart(chartQ1, ts, d.histQ1); setChart(chartQ2, ts, d.histQ2);
+        }
+
+        // Update realtime displays for experiment pages
+        updateExpRealtime();
+    } catch(e) {
+        document.getElementById('statusDot').classList.add('offline');
+        document.getElementById('statusText').textContent = 'Lỗi kết nối server';
+    }
+}
+
+function updateExpRealtime() {
+    // TN1
+    const rt0I = document.getElementById('rt0-I');
+    const rt0U = document.getElementById('rt0-U');
+    if (rt0I) rt0I.textContent = lastI.toFixed(4);
+    if (rt0U) rt0U.textContent = lastU2.toFixed(4);
+    // TN2
+    const rt1U = document.getElementById('rt1-U'); const rt1I = document.getElementById('rt1-I'); const rt1R = document.getElementById('rt1-R');
+    if(rt1U) rt1U.textContent = lastU2.toFixed(4);
+    if(rt1I) rt1I.textContent = lastI.toFixed(4);
+    if(rt1R) rt1R.textContent = lastR2.toFixed(4);
+    // TN3
+    const rt2I = document.getElementById('rt2-I'); const rt2U = document.getElementById('rt2-U'); const rt2r = document.getElementById('rt2-r');
+    if(rt2I) rt2I.textContent = lastI.toFixed(4);
+    if(rt2U) rt2U.textContent = lastU2.toFixed(4);
+    if(rt2r) {
+        const E = parseFloat(document.getElementById('input-E')?.value) || 0;
+        const r = E > 0 && lastI > 0 ? ((E - lastU2) / lastI).toFixed(4) : '—';
+        rt2r.textContent = r;
+    }
+    // TN4
+    const A10 = (lastU2 * lastI * 10).toFixed(4);
+    const Q10 = A10;
+    const rt3U=document.getElementById('rt3-U'); const rt3I=document.getElementById('rt3-I');
+    const rt3A=document.getElementById('rt3-A'); const rt3Q=document.getElementById('rt3-Q');
+    if(rt3U) rt3U.textContent = lastU2.toFixed(4);
+    if(rt3I) rt3I.textContent = lastI.toFixed(4);
+    if(rt3A) rt3A.textContent = (lastI * 10).toFixed(4);
+    if(rt3Q) rt3Q.textContent = (lastU2 * lastI * 10).toFixed(4);
+    // TN5
+    const rt4U=document.getElementById('rt4-U'); const rt4I=document.getElementById('rt4-I'); const rt4P=document.getElementById('rt4-P');
+    if(rt4U) rt4U.textContent = lastU2.toFixed(4);
+    if(rt4I) rt4I.textContent = lastI.toFixed(4);
+    if(rt4P) rt4P.textContent = (lastU2 * lastI).toFixed(4);
+}
+
+
+// =================== MARKDOWN PARSER ===================
+function parseMarkdown(text) {
+    if (!text) return '';
+    return text
+        // Bold: **text** or __text__
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        // Italic: *text* or _text_ (not inside words)
+        .replace(/(?<!\w)\*([^*\n]+?)\*(?!\w)/g, '<em>$1</em>')
+        .replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, '<em>$1</em>')
+        // Numbered list items: "1. text" → styled line
+        .replace(/^(\d+)\.\s+\*\*(.+?)\*\*(.*)$/gm, '<div style="margin:6px 0"><span style="color:var(--cyan);font-weight:700;">$1.</span> <strong>$2</strong>$3</div>')
+        .replace(/^(\d+)\.\s+(.+)$/gm, '<div style="margin:6px 0"><span style="color:var(--cyan);font-weight:700;">$1.</span> $2</div>')
+        // Bullet: "- text" or "• text"
+        .replace(/^[-•]\s+(.+)$/gm, '<div style="margin:4px 0 4px 12px">• $1</div>')
+        // Newlines
+        .replace(/\n/g, '<br>');
+}
+
+
+function addMessage(text, isUser) {
+    const chatBox = document.getElementById('chatBox');
+    const row = document.createElement('div'); row.className = 'msg-row' + (isUser ? ' user' : '');
+    const avatar = document.createElement('div'); avatar.className = 'msg-avatar ' + (isUser ? 'user-av' : 'bot'); avatar.textContent = isUser ? '👤' : '🤖';
+    const bubble = document.createElement('div'); bubble.className = 'bubble ' + (isUser ? 'user-b' : 'bot-b');
+    if (isUser) { bubble.textContent = text; } else { bubble.innerHTML = parseMarkdown(text); }
+    row.appendChild(avatar); row.appendChild(bubble); chatBox.appendChild(row); chatBox.scrollTop = chatBox.scrollHeight;
+}
+function showTyping() {
+    const chatBox = document.getElementById('chatBox');
+    const row = document.createElement('div'); row.className='msg-row'; row.id='typingIndicator';
+    const av = document.createElement('div'); av.className='msg-avatar bot'; av.textContent='🤖';
+    const b = document.createElement('div'); b.className='bubble typing-b';
+    b.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';
+    row.appendChild(av); row.appendChild(b); chatBox.appendChild(row); chatBox.scrollTop=chatBox.scrollHeight;
+}
+function removeTyping() { const el=document.getElementById('typingIndicator'); if(el) el.remove(); }
+
+async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const message = input.value.trim();
+    if (!message) return;
+    addMessage(message, true); input.value=''; showTyping();
+    try {
+        const res = await fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message}) });
+        const data = await res.json(); removeTyping(); addMessage(data.response, false);
+    } catch(e) { removeTyping(); addMessage('Lỗi kết nối chatbot. Thử lại sau nhé!', false); }
+}
+function quickAsk(text) { document.getElementById('userInput').value=text; sendMessage(); }
+function quickAskWithData() {
+    const P1=(lastI*lastU1).toFixed(4), P2=(lastI*lastU2).toFixed(4);
+    const msg = `Số liệu đo được: I=${lastI.toFixed(4)}A, U₁=${lastU1.toFixed(4)}V, U₂=${lastU2.toFixed(4)}V. Tính toán: P₁=${P1}W, R₁=${lastR1.toFixed(4)}Ω, Q₁=${lastQ1.toFixed(3)}J | P₂=${P2}W, R₂=${lastR2.toFixed(4)}Ω, Q₂=${lastQ2.toFixed(3)}J. Bạn hãy phân tích các giá trị này giúp tôi?`;
+    document.getElementById('userInput').value=msg; sendMessage();
+}
+
+// =================== EXPERIMENT SYSTEM ===================
+const EXP_NAMES = [
+    '⚡ Độ mạnh yếu dòng điện',
+    '📐 Điện trở & Đường V-A',
+    '🔋 Nguồn điện – r trong',
+    '⏱️ Khảo sát tiêu thụ điện',
+    '💡 Công suất điện'
+];
+const STAGE_NAMES = ['🎯 Lý Thuyết', '💻 Tinkercad', '🔍 So Sánh', '🔬 Thực Tế', '✅ Tổng Kết'];
+
+// Data storage per experiment
+const expData = { 0: [], 1: [], 2: [], 3: [], 4: [] };
+let currentExp = -1;
+let currentStages = { 0:0, 1:0, 2:0, 3:0, 4:0 };
+
+// Build step wizards
+function buildWizards() {
+    for (let e = 0; e < 5; e++) {
+        const wiz = document.getElementById('wizard-' + e);
+        if (!wiz) continue;
+        wiz.innerHTML = '';
+        for (let s = 0; s < 5; s++) {
+            if (s > 0) {
+                const conn = document.createElement('div'); conn.className = 'step-connector'; wiz.appendChild(conn);
+            }
+            const btn = document.createElement('button');
+            btn.className = 'step-btn' + (s === 0 ? ' active' : '');
+            btn.id = `step-btn-${e}-${s}`;
+            btn.innerHTML = `<div class="step-circle">${s+1}</div><span>${STAGE_NAMES[s]}</span>`;
+            btn.onclick = () => goToStage(e, s);
+            wiz.appendChild(btn);
+        }
+    }
+}
+
+function backToExpList() {
+    document.getElementById('exp-list-view').style.display = 'block';
+    document.getElementById('exp-detail-view').style.display = 'none';
+    document.querySelectorAll('.exp-page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-exp-sub').forEach(el => el.classList.remove('active'));
+    currentExp = -1;
+}
+
+function goToStage(expIdx, stageIdx) {
+    currentStages[expIdx] = stageIdx;
+    // Update stage content
+    for (let s = 0; s < 5; s++) {
+        const sc = document.getElementById(`stage-${expIdx}-${s}`);
+        if (sc) sc.classList.toggle('active', s === stageIdx);
+        const sb = document.getElementById(`step-btn-${expIdx}-${s}`);
+        if (sb) {
+            sb.classList.remove('active', 'completed');
+            if (s < stageIdx) sb.classList.add('completed');
+            else if (s === stageIdx) sb.classList.add('active');
+        }
+    }
+    // Init V-A chart when entering TN2 stage 4
+    if (expIdx === 1 && stageIdx === 3) {
+        setTimeout(initVAChart, 100);
+    }
+    // Trigger AI analysis when reaching stage 5
+    if (stageIdx === 4) {
+        triggerAnalysis(expIdx);
+    }
+}
+
+function nextStage(expIdx, nextIdx) {
+    goToStage(expIdx, nextIdx);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// =================== AI INTROS ===================
+const AI_INTROS = [
+    'Em nghi dieu gi xay ra khi dong dien qua bong den manh hon? [TN1]\n\nThu nghi xem: neu co nhieu electron chuyen dong qua day toc hon trong 1 giay, nhiet do se thay doi nhu the nao?\n\nMuc tieu hom nay: Hieu cuong do dong dien I la dai luong do bao nhieu dien tich chuyen qua trong 1 giay - va quan sat truc tiep anh huong cua I den bong den!\n\nHay dua ra gia thuyet: "Khi I tang, bong den se..."',
+
+    'Tai sao cung mot hieu dien the 9V, nhung dong qua day dong lon hon day nhom? [TN2]\n\nGoi y: moi vat lieu co muc do can tro khac nhau - chinh la dien tro R!\n\nMuc tieu: Hieu R = U/I, va dung do thi V-A de xac dinh R cua vat dan.\n\nDu doan: Neu R khong doi va U tang gap doi, I se thay doi nhu the nao?',
+
+    'Tai sao khi bat nhieu bong den cung luc, do sang lai giam du cung mot acquy? [TN3]\n\nGoi y: acquy thuc te khong phai nguon ly tuong - no co dien tro ben trong!\n\nMuc tieu: Chung minh cong thuc U = E - Ir va do dien tro trong r cua nguon.\n\nDu doan: Khi I tang (bat them bong den), U mach ngoai tang hay giam? Tai sao?',
+
+    'Tai sao ban ui, bep dien nong len khi co dien chay qua? [TN4]\n\nDay chinh la hieu ung Joule - nhiet luong toa ra do electron va cham voi ion mang tinh the!\n\nMuc tieu: Tinh dien luong A = It va nhiet luong Q = UIt trong 10 giay cho cac thiet bi khac nhau.\n\nDu doan: Thiet bi nao toa nhieu nhiet hon - bong den 5 Ohm hay dien tro 10 Ohm o cung U?',
+
+    'Tai sao bong den 100W sang hon bong den 40W du cung cam vao o 220V? [TN5]\n\nCong suat P = UI cho biet thiet bi tieu thu bao nhieu nang luong moi giay!\n\nMuc tieu: Do P thuc te cua thiet bi va so sanh voi cong suat dinh muc tren nhan.\n\nDu doan: Neu do duoc P khac nhan, nguyen nhan co the la gi?'
+];
+
+function loadAIIntro(idx) {
+    const el = document.getElementById('ai-intro-' + idx);
+    if (el && el.textContent === 'Đang tải hướng dẫn AI...') {
+        el.textContent = AI_INTROS[idx];
+    }
+}
+
+// =================== DATA RECORDING ===================
+function recordData(expIdx) {
+    const ts = new Date().toLocaleTimeString('vi-VN');
+    let row = {};
+    const stt = expData[expIdx].length + 1;
+
+    if (expIdx === 0) {
+        row = { stt, ts, I: lastI.toFixed(4), U: lastU2.toFixed(4), desc: lastI > 0.3 ? 'Sáng mạnh' : lastI > 0.15 ? 'Sáng vừa' : 'Sáng yếu' };
+        const tbody = document.getElementById('table-0');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${stt}</td><td>${ts}</td><td style="color:var(--cyan)">${row.I}</td><td style="color:var(--yellow)">${row.U}</td><td style="color:rgba(200,230,255,.6)">${row.desc}</td>`;
+        tbody.appendChild(tr);
+    } else if (expIdx === 1) {
+        row = { stt, ts, I: lastI.toFixed(4), U: lastU2.toFixed(4), R: lastR2.toFixed(4) };
+        const tbody = document.getElementById('table-1');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${stt}</td><td>${ts}</td><td style="color:var(--cyan)">${row.I}</td><td style="color:var(--yellow)">${row.U}</td><td style="color:var(--orange)">${row.R}</td>`;
+        tbody.appendChild(tr);
+        // Update V-A chart
+        if (chartVA) {
+            chartVA.data.datasets[0].data.push({ x: parseFloat(row.I), y: parseFloat(row.U) });
+            chartVA.data.datasets[0].data.sort((a,b) => a.x - b.x);
+            chartVA.update();
+        }
+    } else if (expIdx === 2) {
+        const E = parseFloat(document.getElementById('input-E')?.value) || 0;
+        const Rout = parseFloat(document.getElementById('input-R')?.value) || 0;
+        const r = E > 0 && lastI > 0 ? ((E - lastU2) / lastI).toFixed(4) : '0';
+        row = { stt, ts, I: lastI.toFixed(4), E: E.toFixed(2), Rout: Rout.toFixed(2), r };
+        const tbody = document.getElementById('table-2');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${stt}</td><td>${ts}</td><td style="color:var(--cyan)">${row.I}</td><td style="color:var(--yellow)">${row.E}</td><td style="color:var(--orange)">${row.Rout}</td><td style="color:var(--orange)">${row.r}</td>`;
+        tbody.appendChild(tr);
+    } else if (expIdx === 3) {
+        const A = (lastI * 10).toFixed(4);
+        const Q = (lastU2 * lastI * 10).toFixed(4);
+        row = { stt, ts, U: lastU2.toFixed(4), I: lastI.toFixed(4), A, Q };
+        const tbody = document.getElementById('table-3');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${stt}</td><td>${ts}</td><td style="color:var(--yellow)">${row.U}</td><td style="color:var(--cyan)">${row.I}</td><td style="color:var(--green)">${row.A}</td><td style="color:var(--teal)">${row.Q}</td>`;
+        tbody.appendChild(tr);
+    } else if (expIdx === 4) {
+        const P = (lastU2 * lastI).toFixed(4);
+        row = { stt, ts, U: lastU2.toFixed(4), I: lastI.toFixed(4), P };
+        const tbody = document.getElementById('table-4');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${stt}</td><td>${ts}</td><td style="color:var(--yellow)">${row.U}</td><td style="color:var(--cyan)">${row.I}</td><td style="color:var(--purple)">${row.P}</td>`;
+        tbody.appendChild(tr);
+    }
+    expData[expIdx].push(row);
+}
+
+function clearData(expIdx) {
+    expData[expIdx] = [];
+    const tbody = document.getElementById('table-' + expIdx);
+    if (tbody) tbody.innerHTML = '';
+    if (expIdx === 1 && chartVA) {
+        chartVA.data.datasets[0].data = [];
+        chartVA.update();
+    }
+}
+
+// =================== AI ANALYSIS ===================
+async function triggerAnalysis(expIdx) {
+    const box = document.getElementById('analysis-' + expIdx);
+    if (!box) return;
+
+    const data = expData[expIdx];
+    let prompt = '';
+
+    if (expIdx === 0) {
+        const rows = data.map(r => `I=${r.I}A, U=${r.U}V (${r.desc})`).join('; ');
+        prompt = `Học sinh TN1 - Độ mạnh yếu dòng điện. Dữ liệu ghi được: ${rows || 'Chưa có dữ liệu'}. Hãy phân tích: khi I tăng thì độ sáng thay đổi như thế nào? Điều này chứng minh gì về cường độ dòng điện? Nêu kết luận khoa học và đặt 1 câu hỏi mở rộng.`;
+    } else if (expIdx === 1) {
+        const rows = data.map(r => `U=${r.U}V, I=${r.I}A, R=${r.R}Ω`).join('; ');
+        const Rs = data.map(r => parseFloat(r.R)).filter(r => r > 0);
+        const avgR = Rs.length ? (Rs.reduce((a,b)=>a+b,0)/Rs.length).toFixed(2) : 'chưa đủ';
+        prompt = `Học sinh TN2 - Điện trở & Đường V-A. Dữ liệu: ${rows || 'Chưa có'}. R trung bình ≈ ${avgR}Ω. Phân tích đường V-A, xác nhận định luật Ohm, nhận xét R có ổn định không. Đặt câu hỏi: nếu nhiệt độ tăng thì R thay đổi thế nào?`;
+    } else if (expIdx === 2) {
+        const rows = data.map(r => `I=${r.I}A, E=${r.E}V, Rngoai=${r.Rout}Ω, r=${r.r}Ω`).join('; ');
+        const rs = data.map(r => parseFloat(r.r)).filter(r => !isNaN(r) && r > 0);
+        const avgr = rs.length ? (rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(4) : 'chưa đủ';
+        prompt = `Học sinh TN3 - Nguồn điện & điện trở trong. Dữ liệu: ${rows || 'Chưa có'}. r trung bình ≈ ${avgr}Ω. Phân tích: r có ổn định qua các phép đo không? Nếu acquy chai thì r sẽ như thế nào? Liên hệ thực tế.`;
+    } else if (expIdx === 3) {
+        const rows = data.map(r => `U=${r.U}V, I=${r.I}A, A=${r.A}C, Q=${r.Q}J`).join('; ');
+        prompt = `Học sinh TN4 - Khảo sát tiêu thụ điện 10 giây. Dữ liệu: ${rows || 'Chưa có'}. Phân tích: thiết bị nào tỏa nhiều nhiệt nhất? Nhiệt Joule có ý nghĩa gì trong đời sống (bàn ủi, bếp điện, cầu chì)?`;
+    } else if (expIdx === 4) {
+        const rows = data.map(r => `U=${r.U}V, I=${r.I}A, P=${r.P}W`).join('; ');
+        const Ps = data.map(r => parseFloat(r.P)).filter(p => p > 0);
+        const avgP = Ps.length ? (Ps.reduce((a,b)=>a+b,0)/Ps.length).toFixed(4) : 'chưa đủ';
+        prompt = `Học sinh TN5 - Công suất điện. Dữ liệu: ${rows || 'Chưa có'}. P trung bình ≈ ${avgP}W. Phân tích: P đo được có khớp nhãn thiết bị không? Sai lệch (nếu có) do đâu? Liên hệ tiết kiệm điện.`;
+    }
+
+    try {
+        const res = await fetch('/exp_chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: prompt, exp_id: expIdx })
+        });
+        const d = await res.json();
+        box.innerHTML = `<div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div><div class="ai-analysis-text">${parseMarkdown(d.response)}</div>`;
+    } catch(e) {
+        box.innerHTML = `<div class="ai-analysis-header"><span class="ai-icon">🤖</span><span>Phân Tích AI</span></div><div class="ai-analysis-text" style="color:rgba(200,230,255,.5);">Không thể kết nối AI. Kiểm tra lại kết nối mạng.</div>`;
+    }
+}
+
+// =================== EXP CHAT ===================
+function addExpMsg(boxId, text, isUser) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    const row = document.createElement('div'); row.className = 'msg-row' + (isUser ? ' user' : '');
+    const av = document.createElement('div'); av.className = 'msg-avatar ' + (isUser ? 'user-av' : 'bot'); av.textContent = isUser ? '👤' : '🤖';
+    const b = document.createElement('div'); b.className = 'bubble ' + (isUser ? 'user-b' : 'bot-b');
+    if (isUser) { b.textContent = text; } else { b.innerHTML = parseMarkdown(text); }
+    row.appendChild(av); row.appendChild(b); box.appendChild(row); box.scrollTop = box.scrollHeight;
+}
+
+async function sendExpChat(expIdx) {
+    const input = document.getElementById('einput-' + expIdx);
+    const chatId = 'echat-' + expIdx;
+    const msg = input.value.trim(); if (!msg) return;
+    addExpMsg(chatId, msg, true); input.value = '';
+    // Add typing
+    const box = document.getElementById(chatId);
+    const typing = document.createElement('div'); typing.className='msg-row'; typing.id='exp-typing-'+expIdx;
+    const av2 = document.createElement('div'); av2.className='msg-avatar bot'; av2.textContent='🤖';
+    const b2 = document.createElement('div'); b2.className='bubble typing-b';
+    b2.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';
+    typing.appendChild(av2); typing.appendChild(b2); box.appendChild(typing); box.scrollTop=box.scrollHeight;
+    try {
+        const res = await fetch('/exp_chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message: msg, exp_id: expIdx }) });
+        const d = await res.json();
+        const t = document.getElementById('exp-typing-'+expIdx); if(t) t.remove();
+        addExpMsg(chatId, d.response, false);
+    } catch(e) {
+        const t = document.getElementById('exp-typing-'+expIdx); if(t) t.remove();
+        addExpMsg(chatId, 'Lỗi kết nối. Thử lại sau!', false);
+    }
+}
+
+async function sendExpChatStage(expIdx, stageIdx) {
+    const inputId = `einput-${expIdx}-${stageIdx}`;
+    const chatId = `echat-${expIdx}-${stageIdx}`;
+    // Fallback to main stage 0 chat IDs for stage 1,2,3 if separate not defined
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const msg = input.value.trim(); if (!msg) return;
+    addExpMsg(chatId, msg, true); input.value = '';
+    const box = document.getElementById(chatId);
+    if (!box) return;
+    const typing = document.createElement('div'); typing.className='msg-row'; typing.id=`typing-${expIdx}-${stageIdx}`;
+    const av2 = document.createElement('div'); av2.className='msg-avatar bot'; av2.textContent='🤖';
+    const b2 = document.createElement('div'); b2.className='bubble typing-b';
+    b2.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';
+    typing.appendChild(av2); typing.appendChild(b2); box.appendChild(typing); box.scrollTop=box.scrollHeight;
+    try {
+        const res = await fetch('/exp_chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message: msg, exp_id: expIdx }) });
+        const d = await res.json();
+        const t = document.getElementById(`typing-${expIdx}-${stageIdx}`); if(t) t.remove();
+        addExpMsg(chatId, d.response, false);
+    } catch(e) {
+        const t = document.getElementById(`typing-${expIdx}-${stageIdx}`); if(t) t.remove();
+        addExpMsg(chatId, 'Lỗi kết nối!', false);
+    }
+}
+
+// =================== COMPLETE EXPERIMENT ===================
+function completeExperiment(expIdx) {
+    for (let s = 0; s < 5; s++) {
+        const sb = document.getElementById(`step-btn-${expIdx}-${s}`);
+        if (sb) { sb.classList.remove('active'); sb.classList.add('completed'); }
+    }
+    openReportModal(expIdx);
+}
+
+// =================== STUDENT REPORT MODAL ===================
+let reportExpIdx = -1;
+let reportStarVal = 0;
+let reportAttitude = '';
+let reportAIText = '';
+
+const KNOWLEDGE_BY_EXP = [
+    ['I = Δq/Δt (cường độ dòng điện)', 'Đơn vị Ampere (A)', 'I = nSve (công thức vi mô)', 'I lớn → bóng đèn sáng mạnh hơn', 'Ampe kế mắc nối tiếp'],
+    ['Định luật Ohm: I = U/R', 'Điện trở R = U/I (Ω)', 'Đường đặc trưng V-A', 'R phụ thuộc nhiệt độ', 'Vôn kế mắc song song'],
+    ['Nguồn điện có điện trở trong r', 'Công thức U = E – Ir', 'Khi I tăng → U giảm', 'Acquy chai → r tăng', 'E là suất điện động'],
+    ['Điện lượng A = I×t (Coulomb)', 'Hiệu ứng Joule–Lenz', 'Nhiệt lượng Q = U×I×t (Joule)', 'Thiết bị có R lớn → tỏa nhiều nhiệt', 'Ứng dụng: bàn ủi, bếp điện'],
+    ['Công suất P = U×I (Watt)', 'Nhãn thiết bị: điện áp & công suất định mức', 'P thực tế ≠ P định mức', 'Tiết kiệm điện: dùng thiết bị P nhỏ', 'Hóa đơn điện = P × thời gian']
+];
+
+const DIFFICULTY_TAGS_BY_EXP = [
+    ['Công thức I = nSve', 'Vận tốc drift v', 'Ampe kế mắc nối tiếp', 'Đọc số liệu ESP32', 'Lý thuyết electron tự do'],
+    ['Vẽ đồ thị V-A', 'Tính R từ bảng số liệu', 'Định luật Ohm', 'R thay đổi theo nhiệt độ', 'Mắc vôn kế song song'],
+    ['Công thức U = E – Ir', 'Phân biệt E và U', 'Tính r từ dữ liệu', 'Điện trở trong acquy', 'Đo nhiều điểm khác nhau'],
+    ['Tính điện lượng A = It', 'Nhiệt lượng Q = UIt', 'Phân biệt A và Q', 'So sánh thiết bị khác nhau', 'Hiệu ứng Joule'],
+    ['Đọc nhãn thiết bị', 'P đo ≠ P định mức', 'Công thức P = UI', 'So sánh công suất', 'Tiết kiệm điện thực tế']
+];
+
+function openReportModal(expIdx) {
+    reportExpIdx = expIdx;
+    reportAIText = '';
+    reportStarVal = 0;
+    reportAttitude = '';
+
+    const expNames = ['TN1: Độ Mạnh Yếu Dòng Điện', 'TN2: Điện Trở & Đường V-A', 'TN3: Nguồn Điện & Điện Trở Trong', 'TN4: Khảo Sát Tiêu Thụ Điện', 'TN5: Công Suất Điện'];
+    document.getElementById('reportModalSubtitle').textContent = expNames[expIdx] + ' · ' + new Date().toLocaleDateString('vi-VN');
+
+    // Build knowledge checkboxes
+    const kc = document.getElementById('rp-knowledge-checks');
+    kc.innerHTML = KNOWLEDGE_BY_EXP[expIdx].map((k, i) => `
+        <div class="know-item" id="know-${i}" onclick="toggleKnow(${i})">
+            <div class="know-check" id="know-check-${i}"></div>
+            <div class="know-text">${k}</div>
+        </div>`).join('');
+
+    // Build difficulty tags
+    const dt = document.getElementById('rp-difficulty-tags');
+    dt.innerHTML = DIFFICULTY_TAGS_BY_EXP[expIdx].map((t, i) => `
+        <div class="diff-tag" id="diff-${i}" onclick="toggleDiff(${i})">${t}</div>`).join('');
+
+    // Reset stars & attitude
+    document.querySelectorAll('.star-btn').forEach(s => s.classList.remove('lit'));
+    document.querySelectorAll('.attitude-btn').forEach(b => { b.classList.remove('selected','sel-green','sel-yellow','sel-orange','sel-red'); });
+
+    // Reset AI box
+    document.getElementById('rp-ai-output').style.display = 'none';
+    document.getElementById('rp-ai-output').textContent = '';
+    document.getElementById('rp-export-btn').disabled = true;
+    document.getElementById('rp-gen-btn').textContent = '✨ TẠO BÁO CÁO AI CHI TIẾT';
+
+    document.getElementById('reportModal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeReportModal() {
+    document.getElementById('reportModal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function toggleKnow(i) {
+    const item = document.getElementById('know-' + i);
+    const check = document.getElementById('know-check-' + i);
+    item.classList.toggle('checked');
+    check.textContent = item.classList.contains('checked') ? '✓' : '';
+}
+
+function toggleDiff(i) {
+    document.getElementById('diff-' + i).classList.toggle('sel');
+}
+
+function selectAttitude(el, colorClass) {
+    document.querySelectorAll('.attitude-btn').forEach(b => { b.classList.remove('selected','sel-green','sel-yellow','sel-orange','sel-red'); });
+    el.classList.add('selected', colorClass);
+    reportAttitude = el.dataset.val;
+}
+
+function setStar(n) {
+    reportStarVal = n;
+    document.querySelectorAll('.star-btn').forEach((s, i) => { s.classList.toggle('lit', i < n); });
+}
+
+async function generateAIReport() {
+    const name = document.getElementById('rp-name').value.trim() || 'Học sinh';
+    const cls  = document.getElementById('rp-class').value.trim() || 'Chưa nhập';
+    const learned = document.getElementById('rp-learned').value.trim();
+    const difficulties = document.getElementById('rp-difficulties').value.trim();
+    const lessons = document.getElementById('rp-lessons').value.trim();
+    const experience = document.getElementById('rp-experience').value.trim();
+    const application = document.getElementById('rp-application').value.trim();
+    const suggestion = document.getElementById('rp-suggestion').value.trim();
+
+    const checkedKnow = Array.from(document.querySelectorAll('.know-item.checked')).map(el => el.querySelector('.know-text').textContent);
+    const selDiff = Array.from(document.querySelectorAll('.diff-tag.sel')).map(el => el.textContent);
+
+    const expNames = ['TN1 – Độ mạnh yếu dòng điện', 'TN2 – Điện trở & Đường V-A', 'TN3 – Nguồn điện & Điện trở trong', 'TN4 – Khảo sát tiêu thụ điện', 'TN5 – Công suất điện'];
+    const data = expData[reportExpIdx] || [];
+    const dataStr = data.length > 0 ? `Số điểm dữ liệu ghi được: ${data.length}` : 'Chưa ghi dữ liệu thực nghiệm';
+
+    const prompt = `Bạn là giáo viên Vật lý lớp 11. Hãy viết BÁO CÁO ĐÁNH GIÁ KẾT QUẢ HỌC TẬP chi tiết cho học sinh sau:
+
+THÔNG TIN:
+- Tên: ${name} | Lớp: ${cls}
+- Thí nghiệm: ${expNames[reportExpIdx]}
+- ${dataStr}
+- Thái độ tự đánh giá: ${reportAttitude || 'Chưa chọn'}
+- Tự chấm điểm: ${reportStarVal}/5 sao
+
+KIẾN THỨC ĐÃ NẮM:
+${checkedKnow.length ? checkedKnow.join(', ') : 'Chưa chọn'}
+
+EM TỰ NHẬN XÉT ĐÃ HỌC ĐƯỢC:
+${learned || 'Chưa điền'}
+
+ĐIỂM CÒN KHÓ:
+${selDiff.length ? selDiff.join(', ') : 'Không có'}
+${difficulties || ''}
+
+BÀI HỌC RÚT RA:
+${lessons || 'Chưa điền'}
+
+KINH NGHIỆM THỰC HÀNH:
+${experience || 'Chưa điền'}
+
+LIÊN HỆ THỰC TẾ:
+${application || 'Chưa điền'}
+
+GÓP Ý:
+${suggestion || 'Không có'}
+
+Yêu cầu báo cáo:
+1. Nhận xét tổng quan về mức độ tiếp thu kiến thức (dựa trên các kiến thức đã chọn và tự nhận xét)
+2. Đánh giá thái độ và sự tham gia thí nghiệm
+3. Phân tích điểm mạnh – điểm cần cải thiện cụ thể
+4. Tổng hợp bài học khoa học quan trọng nhất từ thí nghiệm này
+5. Ghi nhận kinh nghiệm thực hành và liên hệ thực tế
+6. Đề xuất định hướng học tiếp theo cho học sinh
+7. Lời động viên kết thúc
+
+Viết bằng tiếng Việt, giọng điệu thân thiện như giáo viên nhận xét học sinh. Ngắn gọn, súc tích, tối đa 400 từ.`;
+
+    const btn = document.getElementById('rp-gen-btn');
+    btn.textContent = '⏳ Đang tạo báo cáo AI...';
+    btn.disabled = true;
+    const box = document.getElementById('rp-ai-output');
+    box.style.display = 'block';
+    box.textContent = '';
+
+    // Streaming-style display with typewriter
+    try {
+        const res = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: prompt })
+        });
+        const d = await res.json();
+        reportAIText = d.response || 'Không thể tạo báo cáo.';
+        // Render with markdown (no typewriter to avoid innerHTML char-by-char issues)
+        box.innerHTML = parseMarkdown(reportAIText);
+        document.getElementById('rp-export-btn').disabled = false;
+        btn.textContent = '🔄 Tạo Lại Báo Cáo';
+        btn.disabled = false;
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch(e) {
+        box.textContent = 'Lỗi kết nối AI. Vui lòng thử lại.';
+        btn.textContent = '✨ TẠO BÁO CÁO AI CHI TIẾT';
+        btn.disabled = false;
+    }
+}
+
+async function exportStudentReport() {
+    const btn = document.getElementById('rp-export-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Đang tạo PDF...';
+
+    const name = document.getElementById('rp-name').value.trim() || 'Hoc_sinh';
+    const cls  = document.getElementById('rp-class').value.trim() || '—';
+    const learned = document.getElementById('rp-learned').value.trim() || '(Chưa điền)';
+    const difficulties = document.getElementById('rp-difficulties').value.trim() || '(Không có)';
+    const lessons = document.getElementById('rp-lessons').value.trim() || '(Chưa điền)';
+    const experience = document.getElementById('rp-experience').value.trim() || '(Chưa điền)';
+    const application = document.getElementById('rp-application').value.trim() || '(Chưa điền)';
+    const suggestion = document.getElementById('rp-suggestion').value.trim() || '(Không có)';
+    const now = new Date().toLocaleString('vi-VN');
+    const starsFull = '★'.repeat(reportStarVal) + '☆'.repeat(5 - reportStarVal);
+    const expNames = ['TN1 – Do Manh Yeu Dong Dien', 'TN2 – Dien Tro & Duong V-A', 'TN3 – Nguon Dien & Dien Tro Trong', 'TN4 – Khao Sat Tieu Thu Dien', 'TN5 – Cong Suat Dien'];
+    const expNamesVi = ['TN1 – Độ Mạnh Yếu Dòng Điện', 'TN2 – Điện Trở & Đường V-A', 'TN3 – Nguồn Điện & Điện Trở Trong', 'TN4 – Khảo Sát Tiêu Thụ Điện', 'TN5 – Công Suất Điện'];
+    const expName = expNamesVi[reportExpIdx];
+
+    const checkedKnow = Array.from(document.querySelectorAll('.know-item.checked')).map(el => `<li>${el.querySelector('.know-text').textContent}</li>`).join('');
+    const selDiff = Array.from(document.querySelectorAll('.diff-tag.sel')).map(el => `<span class="tag">${el.textContent}</span>`).join(' ');
+    const data = expData[reportExpIdx] || [];
+    let tableHtml = '';
+    if (data.length > 0) {
+        const headers = Object.keys(data[0]).map(k => `<th>${k.toUpperCase()}</th>`).join('');
+        const rows = data.map(r => `<tr>${Object.values(r).map(v => `<td>${v}</td>`).join('')}</tr>`).join('');
+        tableHtml = `<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+    } else {
+        tableHtml = '<p class="empty">Chưa có dữ liệu thực nghiệm được ghi.</p>';
+    }
+    const aiHtml = reportAIText
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,'<em>$1</em>')
+        .replace(/^(\d+)\.\s+/gm, (m, n) => `<br><strong style="color:#005599">${n}.</strong> `)
+        .replace(/\n/g,'<br>');
+
+    const html = `<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#fff;color:#222;width:794px}
+.page{width:794px;background:#fff}
+.hdr{background:linear-gradient(135deg,#003366,#0066aa);color:#fff;padding:28px 36px 22px}
+.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.hdr h1{font-size:18px;font-weight:800;letter-spacing:1px;margin-bottom:4px}
+.hdr .sub{font-size:12px;opacity:.75}
+.hdr-badge{background:rgba(255,255,255,.15);border-radius:8px;padding:10px 16px;text-align:center;min-width:100px}
+.hdr-badge .stars{font-size:16px;letter-spacing:3px;color:#ffe600}
+.hdr-badge .att{font-size:11px;margin-top:3px;opacity:.85}
+.hdr-info{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:2px}
+.hdr-info-item{background:rgba(255,255,255,.12);border-radius:6px;padding:8px 12px}
+.hdr-info-item .lbl{font-size:9px;opacity:.6;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px}
+.hdr-info-item .val{font-size:13px;font-weight:700}
+.body{padding:24px 36px}
+.section{margin-bottom:20px}
+.sec-title{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#004488;border-left:4px solid #004488;padding-left:10px;margin-bottom:10px}
+.box{background:#f7faff;border:1px solid #d8e8f8;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.8;color:#333}
+.box.ai{background:#f2fbf4;border-color:#aedfb0}
+.know-list{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.know-list li{background:#eaf3ff;border:1px solid #b8d4f0;border-radius:5px;padding:6px 10px;font-size:11px;color:#004499}
+.know-list li::before{content:"✓ ";font-weight:700;color:#00aa44}
+.tag{display:inline-block;background:#fff0f3;border:1px solid #ffb3c0;border-radius:12px;padding:3px 10px;font-size:10px;color:#cc2244;margin:2px}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px}
+th{background:#003366;color:#fff;padding:7px 10px;text-align:left;font-size:10px;letter-spacing:.5px}
+td{padding:6px 10px;border-bottom:1px solid #e0e8f4}
+tr:nth-child(even) td{background:#f5f8ff}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.empty{color:#999;font-style:italic;font-size:11px}
+.sign-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:24px}
+.sign-box{border:1px dashed #bbb;border-radius:6px;padding:10px 14px;text-align:center;font-size:10px;color:#999}
+.ftr{background:#f0f4fa;border-top:1px solid #ddd;padding:12px 36px;display:flex;justify-content:space-between;font-size:10px;color:#888;margin-top:10px}
+</style>
+</head><body><div class="page">
+
+<div class="hdr">
+  <div class="hdr-top">
+    <div>
+      <div class="sub">HE THONG THI NGHIEM VAT LY ESP32-S3 · LOP 11</div>
+      <h1>BAO CAO KET QUA HOC TAP</h1>
+      <div class="sub" style="margin-top:4px">${expName}</div>
+    </div>
+    <div class="hdr-badge">
+      <div class="stars">${starsFull}</div>
+      <div class="att">${reportAttitude || '—'}</div>
+    </div>
+  </div>
+  <div class="hdr-info">
+    <div class="hdr-info-item"><div class="lbl">Ho va Ten</div><div class="val">${name}</div></div>
+    <div class="hdr-info-item"><div class="lbl">Lop / Nhom</div><div class="val">${cls}</div></div>
+    <div class="hdr-info-item"><div class="lbl">Ngay thuc hien</div><div class="val">${now}</div></div>
+  </div>
+</div>
+
+<div class="body">
+  <div class="section">
+    <div class="sec-title">KIEN THUC TIEP THU</div>
+    ${checkedKnow ? `<ul class="know-list">${checkedKnow}</ul>` : '<p class="empty">Chua chon kien thuc.</p>'}
+    <div class="box" style="margin-top:8px">${learned}</div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">DIEM CON KHO HIEU</div>
+    <div style="margin-bottom:6px">${selDiff || '<span class="empty">Khong co diem kho</span>'}</div>
+    <div class="box">${difficulties}</div>
+  </div>
+
+  <div class="section two-col">
+    <div><div class="sec-title">BAI HOC RUT RA</div><div class="box">${lessons}</div></div>
+    <div><div class="sec-title">KINH NGHIEM THUC HANH</div><div class="box">${experience}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">LIEN HE THUC TE</div>
+    <div class="box">${application}</div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">DU LIEU THUC NGHIEM (${data.length} diem)</div>
+    ${tableHtml}
+  </div>
+
+  <div class="section">
+    <div class="sec-title">NHAN XET AI – TONG HOP BUOI HOC</div>
+    <div class="box ai">${aiHtml || '(Chua tao nhan xet AI)'}</div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">GOP Y & DE XUAT</div>
+    <div class="box">${suggestion}</div>
+  </div>
+
+  <div class="sign-row">
+    <div class="sign-box">Hoc sinh ky ten<br><br><br>..................<br>${name}</div>
+    <div class="sign-box">Nhom truong xac nhan<br><br><br>..................<br>&nbsp;</div>
+    <div class="sign-box">Giao vien nhan xet<br><br><br>..................<br>&nbsp;</div>
+  </div>
+</div>
+
+<div class="ftr">
+  <span>ESP32-S3 Dien Hoc · Flask · Gemini AI · ${now}</span>
+  <span>Trang 1/1</span>
+</div>
+</div></body></html>`;
+
+    // Render HTML in hidden iframe, then capture with html2canvas → jsPDF
+    const iframe = document.createElement('iframe');
+    // Width fixed at A4 pixel width; height auto so content is never clipped
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:794px;height:auto;min-height:1123px;border:0;visibility:hidden;';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    // Wait for fonts and layout to fully render
+    await new Promise(r => setTimeout(r, 1200));
+
+    // Expand iframe to full content height so html2canvas captures everything
+    const contentH = iframe.contentDocument.body.scrollHeight;
+    iframe.style.height = contentH + 'px';
+
+    await new Promise(r => setTimeout(r, 200)); // brief pause after resize
+
+    try {
+        const canvas = await html2canvas(iframe.contentDocument.body, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: 794,
+            height: contentH,
+            windowWidth: 794,
+            windowHeight: contentH,
+            scrollX: 0,
+            scrollY: 0
+        });
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = pdf.internal.pageSize.getWidth();   // 210 mm
+        const pageH = pdf.internal.pageSize.getHeight();  // 297 mm
+        // Margins: 15 mm each side → usable width 180 mm
+        const margin = 15;
+        const usableW = pageW - margin * 2;
+        const imgTotalH = (canvas.height * usableW) / canvas.width; // mm, full height
+        const pageImgH = pageH - margin * 2; // mm of image that fits per page
+
+        let srcY = 0; // current top of slice in mm
+        let first = true;
+        while (srcY < imgTotalH) {
+            if (!first) pdf.addPage();
+            // Draw image offset so correct slice appears in the usable area
+            pdf.addImage(
+                canvas, 'PNG',
+                margin,           // x
+                margin - srcY,    // y (negative offset scrolls the image up)
+                usableW,          // rendered width
+                imgTotalH,        // rendered height (full image, clipped by page)
+                '', 'FAST'
+            );
+            srcY += pageImgH;
+            first = false;
+        }
+        const filename = `BaoCao_${name.replace(/\s+/g,'_')}_${expNames[reportExpIdx].replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
+        pdf.save(filename);
+    } finally {
+        document.body.removeChild(iframe);
+        btn.disabled = false;
+        btn.textContent = '📄 TẢI XUỐNG BÁO CÁO PDF';
+    }
+}
+
+// Input event listeners for experiments
+
+// =================== SIDEBAR MOBILE TOGGLE ===================
+function toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    const isOpen = sb.classList.contains('open');
+    if (isOpen) { closeSidebar(); } else {
+        sb.classList.add('open');
+        ov.classList.add('open');
+    }
+}
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('open');
+}
+// Close sidebar on nav click (mobile)
+document.addEventListener('click', function(e) {
+    if (window.innerWidth <= 768 && e.target.closest('.nav-item, .nav-exp-sub')) {
+        setTimeout(closeSidebar, 120);
+    }
+});
+
+// =================== INIT ===================
+document.addEventListener('DOMContentLoaded', function() {
+    // Bind userInput Enter key
+    const userInputEl = document.getElementById('userInput');
+    if (userInputEl) {
+        userInputEl.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    }
+
+    // Bind experiment chat inputs Enter key
+    document.querySelectorAll('.exp-chat-input input').forEach(function(inp) {
+        inp.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const btn = this.nextElementSibling;
+                if (btn) btn.click();
+            }
+        });
+    });
+
+    // Initialize wizards and start data fetch
+    try { buildWizards(); } catch(e) { console.warn('buildWizards error:', e); }
+    try { fetchData(); } catch(e) { console.warn('fetchData error:', e); }
+    setInterval(function() { try { fetchData(); } catch(e) {} }, 1000);
+});
+</script>
+</body>
+</html>

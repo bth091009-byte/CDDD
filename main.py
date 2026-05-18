@@ -1,12 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory
-import google.generativeai as genai
-from google.generativeai import types
+import google.genai as genai
+from google.genai import types
 import time
 import os
 import threading
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -90,7 +87,7 @@ def receive_data():
             history_data['Q2'].append(round(Q2_total, 4))
             history_data['timestamps'].append(ts)
 
-            for key in history_data:
+            for key in list(history_data.keys()):
                 if len(history_data[key]) > MAX_HISTORY:
                     history_data[key] = history_data[key][-MAX_HISTORY:]
 
@@ -105,22 +102,18 @@ def receive_data():
 def api_latest():
     with data_lock:
         return jsonify({
-            "I":    latest_data['I'],
-            "U1":   latest_data['U1'],
-            "U2":   latest_data['U2'],
-            "V":    latest_data['V'],
-            "R1":   history_data['R1'][-1] if history_data['R1'] else 0,
-            "R2":   history_data['R2'][-1] if history_data['R2'] else 0,
-            "Q1":   Q1_total,
-            "Q2":   Q2_total,
+            "I": latest_data['I'], "U1": latest_data['U1'], "U2": latest_data['U2'], "V": latest_data['V'],
+            "R1": history_data['R1'][-1] if history_data['R1'] else 0,
+            "R2": history_data['R2'][-1] if history_data['R2'] else 0,
+            "Q1": Q1_total, "Q2": Q2_total,
             "timestamp": latest_data['timestamp'],
-            "histI":   history_data['I'][-60:],
-            "histU1":  history_data['U1'][-60:],
-            "histU2":  history_data['U2'][-60:],
-            "histR1":  history_data['R1'][-60:],
-            "histR2":  history_data['R2'][-60:],
-            "histQ1":  history_data['Q1'][-60:],
-            "histQ2":  history_data['Q2'][-60:],
+            "histI": history_data['I'][-60:],
+            "histU1": history_data['U1'][-60:],
+            "histU2": history_data['U2'][-60:],
+            "histR1": history_data['R1'][-60:],
+            "histR2": history_data['R2'][-60:],
+            "histQ1": history_data['Q1'][-60:],
+            "histQ2": history_data['Q2'][-60:],
             "timestamps": history_data['timestamps'][-60:],
             "count": len(history_data['I'])
         })
@@ -137,13 +130,11 @@ def chat():
     try:
         chat_history.append({"role": "user", "parts": [{"text": user_message}]})
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(
-            chat_history,
-            generation_config=types.GenerationConfig(
-                temperature=0.7,
-            ),
-            system_instruction=SYSTEM_CHAT
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=chat_history,
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_CHAT)
         )
         
         reply = response.text
@@ -167,22 +158,12 @@ def exp_chat():
     if not user_message:
         return jsonify({"response": "Em muốn hỏi gì về thí nghiệm này?"})
 
-    exp_context = [
-        "⚡ Độ mạnh yếu dòng điện (I, U)",
-        "📐 Điện trở & Đường đặc trưng V-A",
-        "🔋 Nguồn điện - Điện trở trong r",
-        "⏱️ Khảo sát tiêu thụ điện trong 10 giây",
-        "💡 Công suất điện P = UI"
-    ]
+    exp_context = ["⚡ Độ mạnh yếu dòng điện (I, U)", "📐 Điện trở & Đường đặc trưng V-A",
+                   "🔋 Nguồn điện - Điện trở trong r", "⏱️ Khảo sát tiêu thụ điện trong 10 giây", "💡 Công suất điện P = UI"]
 
     system_exp = f"""
 Bạn là AI hướng dẫn sư phạm cho Thí nghiệm {exp_id+1}: {exp_context[exp_id]}.
-Lớp 11 - Sách Kết nối tri thức và cuộc sống.
-
-VAI TRÒ: Người hướng dẫn, KHÔNG trả lời thẳng - dùng câu hỏi gợi mở.
-PHONG CÁCH: Thân thiện, dễ hiểu, có ví dụ thực tế.
-Luôn kết thúc bằng câu hỏi mở rộng hoặc liên hệ thực tế.
-Trả lời ngắn gọn, tối đa 200 từ.
+Lớp 11. Dùng câu hỏi gợi mở, thân thiện, ngắn gọn.
     """
 
     if exp_id not in exp_chat_histories:
@@ -191,11 +172,11 @@ Trả lời ngắn gọn, tối đa 200 từ.
     try:
         exp_chat_histories[exp_id].append({"role": "user", "parts": [{"text": user_message}]})
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(
-            exp_chat_histories[exp_id],
-            generation_config=types.GenerationConfig(temperature=0.7),
-            system_instruction=system_exp
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=exp_chat_histories[exp_id],
+            config=types.GenerateContentConfig(system_instruction=system_exp)
         )
         
         reply = response.text
@@ -213,5 +194,4 @@ Trả lời ngắn gọn, tối đa 200 từ.
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     print("⚡ Server ESP32-S3 Điện Học đang chạy...")
-    print(f"🌐 Port: {port}")
-    app.run(host='0.0.0.0', port=port, threaded=True)
+    app.run(host='0.0.0.0', port=port)

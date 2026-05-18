@@ -1,14 +1,20 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
+import google.generativeai as genai
 import time
-import threading
-import google.genai as genai
-from google.genai import types
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
-# ================== CẤU HÌNH ==================
-API_KEY = "AIzaSyDmJzknNxErQwElGadOjuchonRIEcgnb7Y"
-client = genai.Client(api_key=API_KEY)
+# ================== LẤY API KEY TỪ ENVIRONMENT VARIABLE ==================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    print("❌ CẢNH BÁO: Chưa thiết lập GEMINI_API_KEY!")
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 SYSTEM_CHAT = """
     Bạn là Chatbot Điện học thông minh, hỗ trợ học sinh tìm hiểu về điện.

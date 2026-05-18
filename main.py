@@ -1,14 +1,16 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import google.generativeai as genai
+from google.generativeai import types
 import time
 import os
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
-# ================== LẤY API KEY TỪ ENVIRONMENT VARIABLE ==================
+# ================== GEMINI API KEY ==================
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
@@ -16,25 +18,25 @@ if not GEMINI_API_KEY:
 else:
     genai.configure(api_key=GEMINI_API_KEY)
 
+# ================== SYSTEM PROMPT ==================
 SYSTEM_CHAT = """
-    Bạn là Chatbot Điện học thông minh, hỗ trợ học sinh tìm hiểu về điện.
+Bạn là Chatbot Điện học thông minh, hỗ trợ học sinh tìm hiểu về điện.
 
-    Nhiệm vụ:
-    - Giải thích các khái niệm: cường độ dòng điện (I), điện áp (U), công suất (P), điện trở (R), nhiệt lượng (Q)
-    - Hệ thống có 1 cảm biến dòng (I) và 2 cảm biến điện áp (U1, U2)
-    - Từ đó tính: P1=I*U1, R1=U1/I, Q1=P1*t và P2=I*U2, R2=U2/I, Q2=P2*t
-    - Giải thích ý nghĩa các số liệu đo được
-    - Trả lời ngắn gọn, dễ hiểu, phù hợp học sinh THPT
+Nhiệm vụ:
+- Giải thích các khái niệm: cường độ dòng điện (I), điện áp (U), công suất (P), điện trở (R), nhiệt lượng (Q)
+- Hệ thống có 1 cảm biến dòng (I) và 2 cảm biến điện áp (U1, U2)
+- Từ đó tính: P1=I*U1, R1=U1/I, Q1=P1*t và P2=I*U2, R2=U2/I, Q2=P2*t
+- Giải thích ý nghĩa các số liệu đo được
+- Trả lời ngắn gọn, dễ hiểu, phù hợp học sinh THPT
 
-    Phong cách: thân thiện, dễ hiểu, có ví dụ thực tế.
-    Nếu không chắc: "Bạn nên kiểm tra thêm tài liệu vật lý hoặc hỏi giáo viên nhé!"
+Phong cách: thân thiện, dễ hiểu, có ví dụ thực tế.
+Nếu không chắc: "Bạn nên kiểm tra thêm tài liệu vật lý hoặc hỏi giáo viên nhé!"
 """
 
-# Lưu lịch sử chat
+# ================== GLOBAL VARIABLES ==================
 chat_history = []
 exp_chat_histories = {}
 
-# ================== LƯU DỮ LIỆU ==================
 latest_data = {"I": 0.0, "U1": 0.0, "U2": 0.0, "V": 0.0, "timestamp": ""}
 history_data = {
     "I": [], "U1": [], "U2": [],
@@ -87,6 +89,7 @@ def receive_data():
             history_data['Q1'].append(round(Q1_total, 4))
             history_data['Q2'].append(round(Q2_total, 4))
             history_data['timestamps'].append(ts)
+
             for key in history_data:
                 if len(history_data[key]) > MAX_HISTORY:
                     history_data[key] = history_data[key][-MAX_HISTORY:]
@@ -130,17 +133,25 @@ def chat():
     user_message = data.get('message', '')
     if not user_message:
         return jsonify({"response": "Bạn muốn hỏi gì về điện học?"})
+
     try:
         chat_history.append({"role": "user", "parts": [{"text": user_message}]})
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=chat_history,
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_CHAT)
+        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            chat_history,
+            generation_config=types.GenerationConfig(
+                temperature=0.7,
+            ),
+            system_instruction=SYSTEM_CHAT
         )
+        
         reply = response.text
         chat_history.append({"role": "model", "parts": [{"text": reply}]})
+        
         if len(chat_history) > 40:
             chat_history = chat_history[-40:]
+            
         return jsonify({"response": reply})
     except Exception as ex:
         print(f"Lỗi Gemini chat: {ex}")
@@ -163,15 +174,14 @@ def exp_chat():
         "⏱️ Khảo sát tiêu thụ điện trong 10 giây",
         "💡 Công suất điện P = UI"
     ]
+
     system_exp = f"""
 Bạn là AI hướng dẫn sư phạm cho Thí nghiệm {exp_id+1}: {exp_context[exp_id]}.
 Lớp 11 - Sách Kết nối tri thức và cuộc sống.
 
 VAI TRÒ: Người hướng dẫn, KHÔNG trả lời thẳng - dùng câu hỏi gợi mở.
 PHONG CÁCH: Thân thiện, dễ hiểu, có ví dụ thực tế.
-QUY TRÌNH: Quan sát → Giả thuyết → Thực nghiệm → Phân tích → Kết luận.
-KHI NHẬN DỮ LIỆU THỰC TẾ: Phân tích cụ thể, cá nhân hóa, kết luận khoa học.
-Luôn kết thúc bằng câu hỏi mở rộng hoặc liên hệ thực tế đời sống học sinh.
+Luôn kết thúc bằng câu hỏi mở rộng hoặc liên hệ thực tế.
 Trả lời ngắn gọn, tối đa 200 từ.
     """
 
@@ -180,15 +190,20 @@ Trả lời ngắn gọn, tối đa 200 từ.
 
     try:
         exp_chat_histories[exp_id].append({"role": "user", "parts": [{"text": user_message}]})
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=exp_chat_histories[exp_id],
-            config=types.GenerateContentConfig(system_instruction=system_exp)
+        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(
+            exp_chat_histories[exp_id],
+            generation_config=types.GenerationConfig(temperature=0.7),
+            system_instruction=system_exp
         )
+        
         reply = response.text
         exp_chat_histories[exp_id].append({"role": "model", "parts": [{"text": reply}]})
+        
         if len(exp_chat_histories[exp_id]) > 30:
             exp_chat_histories[exp_id] = exp_chat_histories[exp_id][-30:]
+            
         return jsonify({"response": reply})
     except Exception as ex:
         print(f"Lỗi exp_chat: {ex}")
@@ -196,7 +211,7 @@ Trả lời ngắn gọn, tối đa 200 từ.
 
 
 if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
     print("⚡ Server ESP32-S3 Điện Học đang chạy...")
-    print("🌐 Truy cập: http://127.0.0.1:5000")
-    print("📡 ESP32 gửi dữ liệu lên /data")
-    app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
+    print(f"🌐 Port: {port}")
+    app.run(host='0.0.0.0', port=port, threaded=True)

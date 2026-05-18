@@ -27,7 +27,6 @@ Nhiệm vụ:
 - Trả lời ngắn gọn, dễ hiểu, phù hợp học sinh THPT
 
 Phong cách: thân thiện, dễ hiểu, có ví dụ thực tế.
-Nếu không chắc: "Bạn nên kiểm tra thêm tài liệu vật lý hoặc hỏi giáo viên nhé!"
 """
 
 # ================== GLOBAL VARIABLES ==================
@@ -158,8 +157,13 @@ def exp_chat():
     if not user_message:
         return jsonify({"response": "Em muốn hỏi gì về thí nghiệm này?"})
 
-    exp_context = ["⚡ Độ mạnh yếu dòng điện (I, U)", "📐 Điện trở & Đường đặc trưng V-A",
-                   "🔋 Nguồn điện - Điện trở trong r", "⏱️ Khảo sát tiêu thụ điện trong 10 giây", "💡 Công suất điện P = UI"]
+    exp_context = [
+        "⚡ Độ mạnh yếu dòng điện (I, U)",
+        "📐 Điện trở & Đường đặc trưng V-A",
+        "🔋 Nguồn điện - Điện trở trong r",
+        "⏱️ Khảo sát tiêu thụ điện trong 10 giây",
+        "💡 Công suất điện P = UI"
+    ]
 
     system_exp = f"""
 Bạn là AI hướng dẫn sư phạm cho Thí nghiệm {exp_id+1}: {exp_context[exp_id]}.

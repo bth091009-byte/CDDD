@@ -12,8 +12,11 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = None
 
 if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    print("✅ Gemini API Connected")
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini API Connected successfully!")
+    except Exception as e:
+        print("❌ Gemini init error:", e)
 else:
     print("❌ WARNING: GEMINI_API_KEY not found!")
 
@@ -115,7 +118,7 @@ def chat():
     global chat_history
     try:
         data = request.get_json()
-        msg = data.get('message', '')
+        msg = data.get('message', '').strip()
         if not msg:
             return jsonify({"response": "Bạn muốn hỏi gì về điện học?"})
 
@@ -124,7 +127,10 @@ def chat():
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=chat_history,
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_CHAT)
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_CHAT,
+                temperature=0.7
+            )
         )
 
         reply = response.text
@@ -135,7 +141,7 @@ def chat():
 
         return jsonify({"response": reply})
     except Exception as e:
-        print("Chat error:", e)
+        print("Chat error:", str(e))
         return jsonify({"response": "Xin lỗi, AI đang bận. Thử lại sau nhé!"})
 
 
@@ -143,12 +149,39 @@ def chat():
 def exp_chat():
     try:
         data = request.get_json()
-        msg = data.get('message', '')
+        msg = data.get('message', '').strip()
+        exp_id = data.get('exp_id', 0)
+
         if not msg:
-            return jsonify({"response": "Em muốn hỏi gì về thí nghiệm?"})
-        return jsonify({"response": "AI đang hỗ trợ thí nghiệm. Bạn đang gặp khó khăn ở phần nào?"})
-    except:
-        return jsonify({"response": "Lỗi kết nối AI"})
+            return jsonify({"response": "Em muốn hỏi gì về thí nghiệm này?"})
+
+        # Tạo system prompt cho từng thí nghiệm
+        exp_context = ["Độ mạnh yếu dòng điện", "Điện trở & Đường V-A", "Nguồn điện - Điện trở trong", 
+                       "Khảo sát tiêu thụ điện", "Công suất điện"]
+        
+        system_exp = f"Bạn là AI hướng dẫn thí nghiệm {exp_id+1}: {exp_context[exp_id]}. Trả lời thân thiện, gợi mở, phù hợp học sinh lớp 11."
+
+        if exp_id not in exp_chat_histories:
+            exp_chat_histories[exp_id] = []
+
+        exp_chat_histories[exp_id].append({"role": "user", "parts": [{"text": msg}]})
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=exp_chat_histories[exp_id],
+            config=types.GenerateContentConfig(system_instruction=system_exp)
+        )
+
+        reply = response.text
+        exp_chat_histories[exp_id].append({"role": "model", "parts": [{"text": reply}]})
+
+        if len(exp_chat_histories[exp_id]) > 25:
+            exp_chat_histories[exp_id] = exp_chat_histories[exp_id][-25:]
+
+        return jsonify({"response": reply})
+    except Exception as e:
+        print("Exp_Chat error:", str(e))
+        return jsonify({"response": "AI đang bận hỗ trợ thí nghiệm. Thử lại sau nhé!"})
 
 
 if __name__ == '__main__':
